@@ -22,6 +22,8 @@
             display: flex;
             flex-direction: column;
             height: 100vh;
+            justify-content: center;
+            align-items: center;
         }
 
         #backgroundVideo {
@@ -83,12 +85,21 @@
         }
         #site-container {
             position: relative;
-            top: 0;
-            left: 0;
-            width: 80%;
+            width: 100%;
+            height: 100%;
             z-index: 1;
             overflow: hidden;
         }
+        #site-iframe {
+            position: absolute;
+            border: none;
+            transform-origin: top left;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+        }
+
     </style>
 </head>
 
@@ -106,7 +117,10 @@
         </div>
       </div>
     <div id="background"></div>
+
     <script>
+        const targetUrl = 'https://www.oshimaya.jp/';
+
         document.addEventListener('DOMContentLoaded', () => {
             const iframe = document.getElementById('site-iframe');
             const targetUrl = 'https://www.oshimaya.jp/';
@@ -114,29 +128,86 @@
             console.log(`http://localhost:3001/proxy?url=${encodeURIComponent(targetUrl)}`)
         });
 
-        function resizeIframe(width, height, offsetLeft, zoom) {
-            const iframe = document.getElementById('site-iframe');
-            const container = document.getElementById('site-container');
+        function scrollIframe(iframe, x, y, duration = 1000) {
+            console.log('scrollIframe started ')
+            const startX = iframe.contentWindow.scrollX;
+            const startY = iframe.contentWindow.scrollY;
+            const endX = startX + x;
+            const endY = startY + y;
+            const startTime = performance.now();
 
-            if (iframe && container) {
-            // Set iframe container width and height
-            container.style.width = `${width}px`;
-            container.style.height = `${height}px`;
+            function animateScroll(currentTime) {
+                const elapsedTime = currentTime - startTime;
+                const progress = Math.min(elapsedTime / duration, 1); // Cap progress at 1
 
-            // Set iframe size with zoom and height
-            iframe.style.width = `${width * zoom}px`;
-            iframe.style.height = `${height * zoom}px`;
+                // Smooth ease-in-out effect
+                const easeProgress = easeInOutQuad(progress);
 
-            // Offset the iframe to show the desired part
-            iframe.style.position = 'relative'; // Ensure the iframe can be offset
-            iframe.style.left = `${-offsetLeft}px`;
-            } else {
-            console.error("iframe or container not found.");
+                iframe.contentWindow.scrollTo(
+                    startX + (endX - startX) * easeProgress,
+                    startY + (endY - startY) * easeProgress
+                );
+
+                if (progress < 1) {
+                    requestAnimationFrame(animateScroll);
+                }
             }
+
+            requestAnimationFrame(animateScroll);
         }
 
-        resizeIframe(1200, 600, -100, 1.3);
+        // Easing function (ease in-out quadratic)
+        function easeInOutQuad(t) {
+            return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        }
+
+        function sendScrollMessage(x, y) {
+            console.log('sendScrollMessage started')
+            const targetUrl = 'https://www.oshimaya.jp/';
+            iframe.contentWindow.postMessage({ scrollX: x, scrollY: y }, `http://localhost:3001/proxy?url=${encodeURIComponent(targetUrl)}&device=mobile`);
+        }
+
+        const iframe = document.getElementById('site-iframe');
+
+        // Example usage: Scroll by 500px right and 300px down over 2 seconds
+        iframe.onload = () => {
+            console.log('iframe loaded')
+            // sendScrollMessage(500, 0);
+            
+            // Example: chaining scroll commands with different timings
+            // setTimeout(() => scrollIframe(iframe, -200, -100, 1000), 3000);
+        };
+
+
+        function resizeIframe(width, height, offsetX = 0, offsetY = 0, zoom = 1) {
+          const container = document.getElementById('site-container');
+          const iframe = document.getElementById('site-iframe');
+          
+          // Set container size
+          container.style.width = `${width}px`;
+          container.style.height = `${height}px`;
+          
+          // Center the container
+          container.style.position = 'absolute';
+          container.style.left = `calc(50% - ${width / 2}px)`;
+          container.style.top = `calc(50% - ${height / 2}px)`;
+          
+          // Set iframe size (scaled)
+          iframe.style.width = `${width}px`;
+          iframe.style.height = `${height}px`;
+          iframe.style.transform = `scale(${zoom})`;
+          iframe.style.width = `${width / zoom}px`; // Maintain original iframe scaling
+          iframe.style.height = `${height / zoom}px`; 
+          
+          // Offset the iframe's position within the container
+          iframe.style.left = `${-offsetX}px`;
+          iframe.style.top = `${-offsetY}px`;
+        }
+      
+        // Example usage:
+        // resizeIframe(1200, 800, 100, 50, 1.2); // Width, Height, Offset X, Offset Y, Zoom
     </script>
+
     <script type="module">
         import * as THREE from 'three';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
