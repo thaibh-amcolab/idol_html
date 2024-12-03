@@ -1,0 +1,1670 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js Example</title>
+    <script async src="https://unpkg.com/es-module-shims@1.3.6/dist/es-module-shims.js"></script>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.154.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.154.0/examples/jsm/",
+          "@pixiv/three-vrm": "https://unpkg.com/@pixiv/three-vrm@2.1.3/lib/three-vrm.module.js"
+        }
+      }
+    </script>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        #backgroundVideo {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: -1;
+            /* Đặt video phía sau các nội dung khác */
+        }
+
+        #backgroundImage {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: -1;
+            /* Đặt video phía sau các nội dung khác */
+        }
+
+        .zoom {
+            transform: scale(1.5);
+            /* Phóng to 1.5 lần */
+            transform-origin: center center;
+            /* Đặt điểm gốc của phép biến đổi */
+            transition: transform 1.5s ease;
+            /* Thêm hiệu ứng chuyển đổi */
+        }
+
+        .zoom-out {
+            transform: scale(1);
+            /* Thu nhỏ lại về kích thước ban đầu */
+            transform-origin: center center;
+            /* Đặt điểm gốc của phép biến đổi */
+            transition: transform 1.5s ease;
+            /* Thêm hiệu ứng chuyển đổi */
+        }
+
+        .animation {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        #backgroundWeb {
+            position: absolute;
+            top: 0;
+            left: 0;
+            border: none;
+            height: 100vh; /* Fixed height for iframe */
+            width: 100%;
+            z-index: -10;
+        }
+    </style>
+</head>
+
+<body>
+    <image id="backgroundImage">
+
+    </image>
+    <video id="backgroundVideo">
+        <source src="" type="video/mp4">
+        Your browser does not support the video tag.
+    </video>
+    <div id="backgroundWeb">
+        <div id="site-container">
+          <iframe src="" id="site-iframe"></iframe>
+        </div>
+      </div>
+    <div id="background"></div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const iframe = document.getElementById('site-iframe');
+            const targetUrl = 'https://www.oshimaya.jp/';
+            iframe.src = `http://localhost:3001/proxy?url=${encodeURIComponent(targetUrl)}&device=mobile`;
+            console.log(`http://localhost:3001/proxy?url=${encodeURIComponent(targetUrl)}`)
+        });
+
+        function resizeIframe(width, height, offsetLeft, zoom) {
+            const iframe = document.getElementById('site-iframe');
+            const container = document.getElementById('site-container');
+
+            if (iframe && container) {
+            // Set iframe container width and height
+            container.style.width = `${width}px`;
+            container.style.height = `${height}px`;
+
+            // Set iframe size with zoom and height
+            iframe.style.width = `${width * zoom}px`;
+            iframe.style.height = `${height * zoom}px`;
+
+            // Offset the iframe to show the desired part
+            iframe.style.position = 'relative'; // Ensure the iframe can be offset
+            iframe.style.left = `${-offsetLeft}px`;
+            } else {
+            console.error("iframe or container not found.");
+            }
+        }
+
+        resizeIframe(800, 600, -500, 1.5);
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { BVHLoader } from 'three/addons/loaders/BVHLoader.js';
+        import { VRMLoaderPlugin, VRMUtils, VRM, VRMExpression, VRMExpressionMorphTargetBind } from '@pixiv/three-vrm';
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+        import { getFirestore, collection, doc, query, where, limit, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+        
+        const queryString = window.location.search;
+        const urlParams = new URLSearchParams(queryString);
+ 
+        const keySchedule = urlParams.get('keySchedule') ? urlParams.get('keySchedule') : 'schedule_new';
+        const liveStreamRoomId = urlParams.get('liveStreamRoomId') ? urlParams.get('liveStreamRoomId') : '-1';
+        const imageElement = document.getElementById('backgroundImage');
+        let currentBackgroundImage = '';
+        imageElement.style.display = 'none';
+
+        // const firebaseConfig = {
+        //     apiKey: "AIzaSyBdrmWY--ZZJhQhxOG8erv69nU1CIn6chQ",
+        //     authDomain: "ai-impulse-app.firebaseapp.com",
+        //     projectId: "ai-impulse-app",
+        //     storageBucket: "ai-impulse-app.appspot.com",
+        //     messagingSenderId: "849392574825",
+        //     appId: "1:849392574825:web:4224482ba13e5ac9b85df8",
+        //     measurementId: "G-05JEFGRE9Z"
+        // };
+
+        // Initialize Firebase
+        // const app = initializeApp(firebaseConfig);
+        // const db = getFirestore(app);
+
+        // const settingCollection = collection(db, 'setting');
+        // const dataDoc = doc(settingCollection, keySchedule);
+        // const dataCollection = collection(dataDoc, 'data')backgroundImage;
+        // const livestreamingQuery = doc(dataCollection, liveStreamRoomId);
+        // try {
+        //     onSnapshot(livestreamingQuery, (snapshot) => {
+        //         if (snapshot.exists()) {
+        //             const data = change.data();
+        //             const backgroundImageTemp = data.background_link;
+        //             if (backgroundImageTemp) {
+        //                 backgroundImage = backgroundImageTemp;
+        //                 updateCurrentBackground(backgroundImage);
+        //             }
+        //             const backgroundVideo = data.background_video;
+        //             window.linkImage = backgroundVideo;
+        //             console.log('backgroundVideo', backgroundVideo);
+        //             const videoElement = document.getElementById('backgroundVideo');
+        //             const imageElement = document.getElementById('backgroundImage');
+        //             if (!window.linkImage) {
+        //                 videoElement.style.display = 'none';
+        //                 imageElement.style.display = 'none';
+        //             } else {
+        //                 if (isVideo(window.linkImage)) {
+        //                     videoElement.style.display = 'block';
+        //                     imageElement.style.display = 'none';
+        //                 } else {
+        //                     imageElement.src = backgrobackgroundImageundVideo;
+        //                     videoElement.style.display = 'none';
+        //                     imageElement.style.display = 'block';
+        //                 }
+        //             }
+        //         } else {
+        //             console.log('No such document!');
+        //         }backgroundImage
+        //     });
+        // } catch (e) {
+        //     console.log(e);
+        // }
+        console.log('1');
+        let currentVrm = [];
+        let clock = new THREE.Clock();
+        let mapAction = new Map();
+        // let currentBvhFilePath = '';
+       
+        let currentTypeOrientation = 'portraitUp';
+        // let playing = false;
+        let isPlayingKaraoke = false;
+        // let listMoraTimeOut = [];
+        // let _listTimeOutBlink = [];
+        // let currentFacial = '';
+        let listData = null;
+        const listBackground = [
+            'day',
+            'night'
+        ]
+
+
+        const parameterBlink = [
+            {
+                blink: 0,
+                blinkLeft: 1,
+                blinkRight: 1,
+            },
+            {
+                blink: 0,
+                blinkLeft: 0,
+                blinkRight: 1,
+            },
+            {
+                blink: 1,
+                blinkLeft: 0,
+                blinkRight: 0,
+            },
+        ]
+
+        const listSpotLight = [];
+        const listColorLight = [];
+
+        setInterval(() => {
+            if (listSpotLight.length == 0) return;
+            for (const spotLight of listSpotLight) {
+                let colorIndex = Math.floor(Math.random() * listColorLight.length);
+                spotLight.color.setHex(listColorLight[colorIndex % listColorLight.length]);
+            }
+        }, 1000);
+
+
+      
+
+        const idolCode = urlParams.get('idolCode');
+        const speedAnimate = urlParams.get('speedAnimate') ? urlParams.get('speedAnimate') : 0.02;
+        const ratioAnimate = urlParams.get('ratioAnimate') ? urlParams.get('ratioAnimate') : 1;
+        const idolType = urlParams.get('idolType') ? urlParams.get('idolType') : 'normal';
+        const liveStreamType = urlParams.get('typeLiveStream') ? urlParams.get('typeLiveStream') : 'normal';
+        window.isPlayingGame = false;
+        let backgroundImage = urlParams.get('backgroundImage') ? urlParams.get('backgroundImage') : 'https://plus.unsplash.com/premium_photo-1664474619075-644dd191935f?q=80&w=1738&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
+        const hostVrm = urlParams.get('hostVrm') ? urlParams.get('hostVrm') : '';
+        const positionCameraX = urlParams.get('positionCameraX') ? urlParams.get('positionCameraX') : 0;
+        const positionCameraY = urlParams.get('positionCameraY') ? urlParams.get('positionCameraY') : 1.4;
+        const positionCameraZ = urlParams.get('positionCameraZ') ? urlParams.get('positionCameraZ') : -1.1;
+        console.log('hostVrm', hostVrm);
+        console.log('idolType', idolType);
+        console.log('ratioAnimate', ratioAnimate);
+        // const mapBVHFile = new Map();
+        const imageFile = new Map();
+        var scene = new THREE.Scene();
+        var camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(positionCameraX, positionCameraY, positionCameraZ);
+        camera.rotation.set(0, Math.PI, 0);
+
+        // camera.position.set(0, 1.2, 1.25);
+        // camera.rotation.set(Math.PI, Math.PI, Math.PI);
+        window.addEventListener("changeOrientation", (result) => {
+            // Update camera aspect ratio
+            // console.log('changeOrientation', window.innerWidth);
+            // console.log('changeOrientation', window.innerHeight);
+            var width = 0;
+            var height = 0;
+
+            var data = result.detail;
+            var typeOrientation = data.orientation;
+            currentTypeOrientation = typeOrientation;
+            console.log('changeOrientation', typeOrientation);
+            if (typeOrientation == 'portraitUp' || typeOrientation == 'portraitDown') {
+                if (window.innerWidth > window.innerHeight) {
+                    width = window.innerHeight;
+                    height = window.innerWidth;backgroundImage
+                } else {
+                    width = window.innerWidth;
+                    height = window.innerHeight;
+                }
+            } else if (typeOrientation == 'landscapeRight' || typeOrientation == 'landscapeLeft') {
+                if (windowbackgroundImage.innerWidth > window.innerHeight) {
+                    width = window.innerWidth;
+                    height = window.innerHeight;
+                } else {
+                    width = window.innerHeight;
+                    height = window.innerWidth;
+                }
+            }
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            // Update renderer size
+            renderer.setPibackgroundImagexelRatio(window.devicePixelRatio);
+            renderer.setSize(width, height);
+            renderer.render(scene, camera);
+            _changePosition(typeOrientation);
+
+            updateCurrentBackground(`/img/${idolCode}_${currentTypeHour}.png`);
+
+            if (backgroundImage !== '') {
+                updateCurrentBackground(backgroundImage);
+            }
+
+
+        }, false);
+
+        let now = new Date(new Date().toUTCString());
+        console.log('currentHour', now.getTimezoneOffset() / 60);
+        var japanTime = addHours(now, 9 + (now.getTimezoneOffset() / 60));
+        let currentTypeHour = getCurrentTypeHour(japanTime);
+        updateCurrentBackground(`/img/${idolCode}_${currentTypeHour}.png`);
+
+        if (backgroundImage !== '') {
+            updateCurrentBackground(backgroundImage);
+        }
+        const renderer = new THREE.WebGLRenderer({ alpha: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const targetAspect = document.body.clientWidth / document.body.clientHeight;
+        // // for (const name of listBackground) {
+        // //     new THREE.TextureLoader().load( `/img/${name}.png`, ( texture ) => {
+        // //         imageFile.set(name, texture);
+        // //         if(name == 'default'){
+        // //             console.log('aa');
+        // //             updateCurrentBackground(name);
+        // //         }
+        // //     } );
+        // // }
+
+        function updateCurrentBackground(url) {
+            document.body.style.background = 'transparent';
+                document.getElementById('background').style.background = 'transparent';
+                currentBackgroundImage = '';
+            // currentBackgroundImage = '';
+            // console.log('window.isPlayingGame', window.isPlayingGame);
+            // if (!window.isPlayingGame) {
+            //     console.log('updateCurrentBackground', url);
+            //     if (currentBackgroundImage != url) {
+            //         var backgroundElement = document.getElementById('background');
+            //         // document.body.style.background = 'transparent';
+            //         backgroundElement.style.backgroundImage = `url(${url})`;
+            //         backgroundElement.style.position = 'fixed';
+            //         backgroundElement.style.backgroundRepeat = 'no-repeat';
+            //         backgroundElement.style.backgroundAttachment = 'fixed';
+            //         backgroundElement.style.backgroundSize = 'cover';
+            //         backgroundElement.style.backgroundPosition = 'bottom';
+            //         backgroundElement.style.top = '0';
+            //         backgroundElement.style.left = '0';
+            //         backgroundElement.style.height = '100%';
+            //         backgroundElement.style.width = '100%';
+            //         backgroundElement.style.zIndex = '-1';
+            //         // backgroundElement.style.background = null;
+            //         currentBackgroundImage = url;
+            //     }
+            // } else {
+            //     document.body.style.background = 'transparent';
+            //     document.getElementById('background').style.background = 'transparent';
+            //     currentBackgroundImage = '';
+            // }
+        }
+
+        function updateFacial(facial, currentMotion, vrmSet) {
+            if (vrmSet && vrmSet.expressionManager) {
+                const value = 0.35;
+                if (vrmSet.currentFacial != facial) {
+                    resetEmotion(vrmSet);
+                    switch (vrmSet.facial) {
+                        case 'neutral':
+                            vrmSet.expressionManager.setValue("neutral", value);
+                            vrmSet.expressionManager.setValue("relaxed", 0);
+                            vrmSet.expressionManager.setValue("happy", 0);
+                            vrmSet.expressionManager.setValue("Surprised", 0);
+                            break;
+                        case 'relaxed':
+                            vrmSet.expressionManager.setValue("neutral", 0);
+                            vrmSet.expressionManager.setValue("relaxed", value);
+                            vrmSet.expressionManager.setValue("happy", 0);
+                            vrmSet.expressionManager.setValue("Surprised", 0);
+                            break;
+                        case 'happy':
+                            vrmSet.expressionManager.setValue("neutral", 0);
+                            vrmSet.expressionManager.setValue("relaxed", 0);
+                            vrmSet.expressionManager.setValue("happy", value);
+                            vrmSet.expressionManager.setValue("Surprised", 0);
+                            break;
+                        case 'Surprised':
+                            vrmSet.expressionManager.setValue("neutral", 0);
+                            vrmSet.expressionManager.setValue("relaxed", 0);
+                            vrmSet.expressionManager.setValue("happy", 0);
+                            vrmSet.expressionManager.setValue("Surprised", value);
+                            break;
+
+                        default:
+                            vrmSet.currentFacial = facial;
+                            console.log("currentFacial", vrmSet.currentFacial);
+
+                    }
+
+                }
+            }
+        }
+
+        const light = new THREE.DirectionalLight(0xffffff);
+        light.position.set(-1, 1, -1).normalize();
+        scene.add(light);
+
+        const fold = (reducer, init, xs) => {
+            let acc = init;
+            for (const x of xs) {
+                acc = reducer(acc, x);
+            }
+            return acc;
+        };
+
+        window.addEventListener("dataDetail", (result) => {
+            try {
+                var data = result.detail;
+                console.log('dataDetail', data);
+                // var mora = data.currentMora;
+                // voice(mora);
+
+                var currentMotion = data.motion;
+                var currentMotionOnline = data.motionOnline;
+                var idolCode = data.idolCode;
+                console.log('dataDetail', currentMotionOnline);
+
+                var vrmSet = currentVrm.find(item => item.name == idolCode);
+                // if (!isPlayingKaraoke) {
+                if (currentMotionOnline && currentMotionOnline.length > 0) {
+                    if (currentMotionOnline.includes('http')) {
+                        applyAnimation(currentMotionOnline, '', vrmSet, currentMotion);
+                    } else {
+                        console.log("dataDetail", currentMotionOnline);
+                        applyAnimation(`/bvh/${currentMotionOnline}`, '', vrmSet, currentMotion);
+                    }
+                } else {
+                    if (currentMotion) {
+                        console.log("dataDetail", currentMotion);
+                        if (currentMotion.includes('http')) {
+                            applyAnimation(currentMotion, '', vrmSet);
+                        } else {
+                            applyAnimation(`/bvh/${currentMotion}.bvh`, '', vrmSet);
+                        }
+                    }
+                }
+                // }
+
+                var currentBackground = data.currentBackground;
+                if (currentBackground) {
+                    if (backgroundImage == '') {
+                        updateCurrentBackground(`/img/${idolCode}_${currentBackground}.png`);
+                    }
+                }
+
+                var facial = data.facial;
+                if (facial) {
+                    updateFacial(facial, currentMotion, vrmSet);
+                }
+                // // applyAnimation('/models/talking.bvh', 'talking');
+                // var timeCurrent = data.currentTime;
+                // if (mixer) mixer.setTime(timeCurrent / 1000);
+                // if (joinSpringManager) joinSpringManager.update(1 / 1000);
+                // for (const index in data) {
+                //     if(index == 0) {
+                //         voice(data[0]);
+                //         continue;
+                //     } 
+                //     var listBefore = data.slice(0, index);
+                //     const sum = xs => fold((acc, x) => ((x?.consonant_length ?? 0) + (x?.vowel_length ?? 0)) + acc, 0, xs); 
+                //     setTimeout(() => {
+                //         voice(data[index]);
+                //     }, sum(listBefore) * 1000);
+                // }
+            } catch (e) {
+                console.log(e);
+            }
+        }, false);
+
+        window.addEventListener("startPlaying", (result) => {
+            console.log('startPlaying1', isPlayingKaraoke)
+
+            if (isPlayingKaraoke) {
+                return;
+            }
+            var data = result.detail;
+            var idolCode = data.idolCode;
+            console.log("startPlaying2", idolCode);
+            var mora = data.mora;
+            console.log('startPlaying3', mora);
+            var currentTimeVoice = data.currentTime;
+            var vrmSet = currentVrm.find(item => item.name == idolCode);
+            console.log("startPlaying4", vrmSet);
+            for (const vrm of currentVrm) {
+                for (const timeoutId of vrm.listMoraTimeOut) {
+                    clearTimeout(timeoutId);
+                }
+                vrm.listMoraTimeOut.length = 0;
+            }
+            if (mora) {
+                resetBlink(vrmSet);
+                resetMouth(vrmSet);
+                resetEmotion(vrmSet)
+                resetAllParam(vrmSet);
+                vrmSet.playing = true;
+                console.log("startPlaying5");
+                console.log('startPlaying6', currentTimeVoice);
+
+                // vrmSet.listMoraTimeOut.length = 0;
+                Object.keys(mora).forEach(function (key, index) {
+                    if (parseFloat(currentTimeVoice) < parseFloat(key)) {
+                        var timeoutId = setTimeout(() => {
+                            if (vrmSet.playing) {
+                                voice(mora[key], timeoutId, vrmSet);
+                            }
+                        }, parseFloat(key) - parseFloat(currentTimeVoice));
+                        vrmSet.listMoraTimeOut.push(timeoutId);
+                    }
+                });
+            }
+
+
+        }, false);
+
+
+        let listMora = ['a', 'i', 'u', 'e', 'o', 'paused']
+        let listRandomParam = ['Param1', 'Param2', 'Param3', 'Param4', 'Param5', 'Param6', 'Param7']
+
+        function randomFacial(vrmSet) {
+            let randIndex;
+
+            do {
+                randIndex = Math.floor(Math.random() * listRandomParam.length);
+            } while (listRandomParam[randIndex] === vrmSet.prev3 && listRandomParam[randIndex] === vrmSet.prev4);
+            vrmSet.currentFacial = listRandomParam[randIndex];
+            vrmSet.prev4 = vrmSet.prev3;
+            vrmSet.prev3 = listRandomParam[randIndex];
+            var timeoutId = setTimeout(() => {
+                if (isPlayingKaraoke) {
+                    randomFacial(vrmSet);
+                }
+            }, 10000);
+            vrmSet.listFacialTimeOut.push(timeoutId);
+        }
+
+        function randomMora(vrmSet) {
+            let randIndex;
+
+            do {
+                randIndex = Math.floor(Math.random() * listMora.length);
+            } while (listMora[randIndex] === vrmSet.prev1 && listMora[randIndex] === vrmSet.prev2);
+            vrmSet.prev1 = vrmSet.prev2;
+            vrmSet.prev2 = listMora[randIndex];
+            var timeoutId = setTimeout(() => {
+                if (isPlayingKaraoke) {
+
+                    voice(listMora[randIndex], timeoutId, vrmSet);
+                    randomMora(vrmSet);
+                }
+            }, 400);
+            vrmSet.listMoraTimeOut.push(timeoutId);
+        }
+
+        window.addEventListener("addGift", (result) => {
+            console.log('addGift');
+            var data = result.detail;
+            console.log('addGift', data);
+            var opacity = data.opacity;
+            var src = data.src;
+            var blendMode = data.blendMode;
+            var container = document.getElementById("imageContainer");
+            var existingImage = container.querySelector("img");
+
+            if (existingImage) {
+                // Xóa ảnh nếu đã tồn tại
+                container.removeChild(existingImage);
+
+            }
+
+            var img = document.createElement("img");
+            img.src = src;
+            img.alt = "Animated GIF";
+            img.className = "animation";
+            img.style.opacity = opacity ?? 1.0;
+            img.style.mixBlendMode = blendMode ?? "screen";
+            container.appendChild(img);
+        }, false);
+
+        window.addEventListener("removeGift", (result) => {
+            console.log('removeGift');
+            var container = document.getElementById("imageContainer");
+            var existingImage = container.querySelector("img");
+
+            if (existingImage) {
+                container.removeChild(existingImage);
+            }
+        }, false);
+
+        window.addEventListener("startKaraoke", (result) => {
+            console.log('startKaraoke');
+            isPlayingKaraoke = true;
+            // playing = true;
+            for (const vrmSet of currentVrm) {
+                console.log('startKaraoke', ' resetPosition');
+                vrmSet.playing = true;
+                for (const timeoutId of vrmSet.listMoraTimeOut) {
+                    clearTimeout(timeoutId);
+                }
+                vrmSet.listMoraTimeOut.length = 0;
+                console.log('startKaraoke1');
+                resetMouth(vrmSet);
+                resetAllParam(vrmSet);
+                randomFacial(vrmSet);
+            }
+        }, false);
+
+        window.addEventListener("startKaraokeSing", (result) => {
+            console.log('startKaraokeSing');
+            isPlayingKaraoke = true;
+            for (const vrmSet of currentVrm) {
+                vrmSet.playing = true;
+                var data = result.detail;
+                console.log('startKaraokeSing', data);
+                // var bvhFile = data.bvhFile;
+                // console.log('startKaraokeSing', bvhFile);
+                // if (bvhFile && bvhFile != '') {
+                //     if (bvhFile.includes('http')) {
+                //         applyAnimation(bvhFile, '', vrmSet);
+                //     } else {
+                //         console.log("startKaraokeSing", bvhFile);
+                //         applyAnimation(`/bvh/${bvhFile}`, '', vrmSet);
+                //     }
+                // }
+                // playing = true;
+                for (const timeoutId of vrmSet.listMoraTimeOut) {
+                    clearTimeout(timeoutId);
+                }
+                vrmSet.listMoraTimeOut.length = 0;
+                console.log('startKaraokeSing1');
+
+                randomMora(vrmSet);
+            }
+            // playing = true;
+            // var data = result.detail;
+            // console.log('startKaraokeSing', data);
+            // var bvhFile = data.bvhFile;
+            // console.log('startKaraokeSing', bvhFile);
+            // if(bvhFile && bvhFile != ''){
+            //     if(bvhFile.includes('http')){
+            //         applyAnimation(bvhFile);
+            //     } else {
+            //         console.log("startKaraokeSing", bvhFile);
+            //         applyAnimation(`/bvh/${bvhFile}`);
+            //     }
+            // }
+            // // playing = true;
+            // for (const timeoutId of listMoraTimeOut) {
+            //         clearTimeout(timeoutId);
+            // }   
+            // listMoraTimeOut.length = 0;
+            // console.log('startKaraokeSing1');
+
+            // randomMora();
+        }, false);
+
+        window.addEventListener("endKaraoke", (result) => {
+            console.log('endKaraoke');
+            isPlayingKaraoke = false;
+            for (const vrmSet of currentVrm) {
+                vrmSet.playing = false;
+                for (const timeoutId of vrmSet.listMoraTimeOut) {
+                    clearTimeout(timeoutId);
+                }
+                vrmSet.listMoraTimeOut.length = 0;
+                for (const timeoutId of vrmSet.listFacialTimeOut) {
+                    clearTimeout(timeoutId);
+                }
+                vrmSet.listFacialTimeOut.length = 0;
+                vrmSet.currentFacial = '';
+            }
+        }, false);
+
+        const createSpotLight = (color, position) => {
+            const realColor = parseInt(color, 16);
+            const spotLight = new THREE.DirectionalLight(realColor, 0.3); // Full intensity
+            spotLight.position.set(...position);
+            scene.add(spotLight);
+            listSpotLight.push(spotLight);
+            return spotLight;
+        };
+
+        function isVideo(fileName) {
+            const lowerCaseFileName = fileName.toLowerCase();
+            if (lowerCaseFileName.includes('.mp4')) {
+                return true;
+            }
+            if (lowerCaseFileName.includes('.mov')) {
+                return true;
+            }
+            return false;
+        }
+
+        window.addEventListener("startGame", (result) => {
+            if (window.isPlayingGame == true) {
+                return;
+            }
+            console.log('startGame');
+            window.isPlayingGame = true;
+            var data = result.detail;
+            var typeProgram = data.typeProgram;
+            var listColors = data.listColor;
+            if (currentVrm.length == 1) {
+                if (currentVrm[0]) {
+                    if (typeProgram == 'karaoke' || window.linkImage.includes('karaoke')) {
+                        addSpotLight(listColors);
+                        currentVrm[0].scene.position.set(0, 0, 0.2);
+                    } else {
+                        _changePosition();
+                    }
+                }
+            } else {
+                if (typeProgram.includes('karaoke') || window.linkImage.includes('karaoke')) {
+                    addSpotLight(listColors);
+                }
+                _changePosition();
+            }
+            updateCurrentBackground(`/img/${idolCode}_${currentTypeHour}.png`);
+        }, false);
+
+        function addSpotLight(listColors) {
+            if (!listColors || listColors.length == 0) {
+                return;
+            }
+            listColorLight.length = 0;
+            listSpotLight.length = 0;
+            listColorLight.push(...listColors);
+            let sportLight = createSpotLight("0xff0000", [1, 1, -1]); // Red light
+            let sportLight1 = createSpotLight("0x00ff00", [2, 1, -1]); // Green light
+            let sportLight2 = createSpotLight("0x0000ff", [0, 1, -1]); // Blue light
+            scene.remove(light);
+        }
+
+        window.addEventListener("endGame", (result) => {
+            if(window.isPlayingGame == false){
+                return;
+            }
+            console.log('endGame');
+            window.isPlayingGame = false;
+            removeSpotLight();
+            if (currentVrm.length == 1) {
+                currentVrm[0].scene.position.set(0, 0, 0);
+            }
+            console.log('endGame', ' updateCurrentBackground');
+            updateCurrentBackground(`/img/${idolCode}_${currentTypeHour}.png`);
+
+            if (backgroundImage !== '') {
+                updateCurrentBackground(backgroundImage);
+            }
+
+        }, false);
+
+        function removeSpotLight() {
+            for (const spotLight of listSpotLight) {
+                scene.remove(spotLight);
+            }
+            listSpotLight.length = 0;
+            listColorLight.length = 0;
+            scene.add(light);
+        }
+
+        window.addEventListener("startProgramImage", (result) => {
+            console.log('startProgramImage');
+            window.isPlayingGame = true;
+            var data = result.detail;
+            var typeProgram = data.typeProgram;
+            var listColors = data.listColor;
+            console.log('startProgramImage', data.typeProgram);
+            if (currentVrm.length == 1) {
+                if (currentVrm[0]) {
+                    if (typeProgram == 'karaoke' || window.linkImage.includes('karaoke')) {
+                        currentVrm[0].scene.position.set(0, 0, 0.2);
+                        addSpotLight(listColors);
+                    } else {
+                        currentVrm[0].scene.position.set(0.08, -0.25, 0);
+                    }
+                }
+            }
+
+            updateCurrentBackground(`/img/${idolCode}_${currentTypeHour}.png`);
+
+            if (backgroundImage !== '') {
+                updateCurrentBackground(backgroundImage);
+            }
+        }, false);
+
+        window.addEventListener("endProgramImage", (result) => {
+            console.log('endProgramAudio');
+            window.isPlayingGame = false;
+            removeSpotLight();
+            if (currentVrm.length == 1) {
+                if (currentVrm[0]) {
+                    currentVrm[0].scene.position.set(0, 0, 0);
+                }
+            }
+
+            console.log('endGame', ' updateCurrentBackground');
+            updateCurrentBackground(`/img/${idolCode}_${currentTypeHour}.png`);
+
+            if (backgroundImage !== '') {
+                updateCurrentBackground(backgroundImage);
+            }
+
+        }, false);
+
+        window.addEventListener("startProgramAudio", (result) => {
+            console.log('startProgramAudio');
+            window.isPlayingGame = true;
+            if (currentVrm.length == 1) {
+                if (currentVrm[0]) {
+                    currentVrm[0].scene.position.set(0.08, -0.25, 0);
+                }
+            }
+
+            var backgroundElement = document.getElementById('background');
+            document.body.style.background = 'transparent';
+            backgroundElement.style.backgroundImage = `url(${window.linkImage})`;
+            backgroundElement.style.position = 'fixed';
+            backgroundElement.style.backgroundRepeat = 'no-repeat';
+            backgroundElement.style.backgroundAttachment = 'fixed';
+            backgroundElement.style.backgroundSize = 'cover';
+            backgroundElement.style.backgroundPosition = 'center';
+            backgroundElement.style.top = '0';
+            backgroundElement.style.left = '0';
+            backgroundElement.style.height = '100%';
+            backgroundElement.style.width = '100%';
+            backgroundElement.style.zIndex = '-1';
+            // backgroundElement.style.background = null;
+            currentBackgroundImage = window.linkImage;
+
+        }, false);
+
+        window.addEventListener("endProgramAudio", (result) => {
+            console.log('endProgramAudio');
+            window.isPlayingGame = false;
+            if (currentVrm.length == 1) {
+                if (currentVrm[0]) {
+                    currentVrm[0].scene.position.set(0, 0, 0);
+                }
+            }
+            removeSpotLight();
+            console.log('endGame', ' updateCurrentBackground');
+            updateCurrentBackground(`/img/${idolCode}_${currentTypeHour}.png`);
+
+            if (backgroundImage !== '') {
+                updateCurrentBackground(backgroundImage);
+            }
+
+        }, false);
+
+        window.addEventListener("setParams", (result) => {
+            console.log('setParams');
+            var data = result.detail;
+
+            var params = data.param;
+            console.log('setParams', params);
+
+            listData = params;
+            for (const vrmSet of currentVrm) {
+                updateExpression(vrmSet);
+            }
+            console.log(listData);
+
+        }, false);
+
+        window.addEventListener("endPlaying", (result) => {
+            var data = result.detail;
+            console.log('endPlaying', data);
+
+            var idolCode = data.idolCode;
+            console.log('endPlaying', idolCode);
+            var vrmSet = currentVrm.find(item => item.name == idolCode);
+            console.log('endPlaying', vrmSet);
+
+            vrmSet.playing = false;
+            if (vrmSet) {
+                resetAllParam(vrmSet);
+                resetEmotion(vrmSet);
+                resetMouth(vrmSet);
+                resetBlink(vrmSet);
+                vrmSet.currentFacial = '';
+            }
+        }, false);
+
+        window.addEventListener("loadVrm", (result) => {
+            var data = result.detail;
+            console.log("loadVrm", data);
+            var listIdol = data;
+            for (const idol of listIdol) {
+                console.log("loadVrm", idol.idolCode);
+                console.log("loadVrm", idol.idolType);
+                var vrmLink = hostVrm == '' ? `/models/${idol.idolCode}_${idol.idolType}.vrm` :
+                    `${hostVrm}/${idol.idolCode}_${idol.idolType}.vrm`;
+                console.log("loadVrm", vrmLink);
+                loadVrm(vrmLink, idol.idolCode, listIdol.length, listIdol.indexOf(idol));
+            }
+        }, false);
+        // loadVrm('/models/Sena_Saotome.vrm', 'Sena_Saotome', 1, 0);
+
+        // setTimeout(() => {
+        //     console.log('startProgramImage');
+        //     window.isPlayingGame = true;
+        //     var data = {typeProgram: 'weak'};
+        //     var typeProgram = data.typeProgram;
+        //     console.log('startProgramImage', data.typeProgram);
+        //     if(currentVrm.length == 1) {
+        //         if(currentVrm[0]){
+        //             if(typeProgram == 'karaoke'){
+        //                 currentVrm[0].scene.position.set(0, 0, 0.2);
+        //             } else {
+        //                 currentVrm[0].scene.position.set(0.08, -0.25, 0);
+        //             } 
+        //         }
+        //     }
+
+        //     updateCurrentBackground(`/img/${idolCode}_${currentTypeHour}.png`);
+
+        //     if(backgroundImage !== ''){
+        //         updateCurrentBackground(backgroundImage);
+        //     }
+
+
+        // }, 6000);
+        loadVrm('/models/Yui_Saionji_normal.vrm', 'Yui_Saionji', 1, 1);
+        function loadVrm(vrmLink, idolCode, totalIdol, indexIdol) {
+            console.log('loadVrm', vrmLink);
+            console.log('loadVrm', idolCode);
+            console.log('loadVrm', totalIdol);
+            console.log('loadVrm', indexIdol);
+            const loader = new GLTFLoader();
+
+            // Install GLTFLoader plugin
+            loader.register((parser) => {
+                return new VRMLoaderPlugin(parser);
+            });
+
+            loader.load(
+                vrmLink,
+
+                // vrmLink,
+                // called when the resource is loaded
+                (gltf) => {
+                    const vrm = gltf.userData.vrm;
+                    // calling these functions greatly improves the performance
+                    VRMUtils.removeUnnecessaryVertices(gltf.scene);
+                    VRMUtils.removeUnnecessaryJoints(gltf.scene);
+                    // Disable frustum culling
+                    vrm.scene.traverse((obj) => {
+                        obj.frustumCulled = false;
+                    });
+
+
+
+                    console.log('vrm.scene', vrm.scene);
+                    scene.add(vrm.scene);
+
+                    vrm.name = idolCode;
+                    vrm.listMoraTimeOut = [];
+                    vrm.isStartSetVoice = false;
+                    vrm.currentFacial = '';
+                    vrm.listTimeOutBlink = [];
+                    vrm.listFacialTimeOut = [];
+                    vrm.lastTimeUpdateMotion = 0;
+                    vrm.loading = false;
+                    vrm.isFading = false;
+                    vrm.currentAction = null;
+                    vrm.pendingAnimation = null;
+                    const bone = vrm.scene.getObjectByName('J_Bip_C_Hips');
+                    if (bone) {
+                        vrm.initialPosition = bone.position.clone();
+                    }
+                    currentVrm.push(vrm);
+                    updateExpression(vrm);
+                    updateEmotion(vrm);
+                    console.log("window.isPlayingGameLoadIdol", window.isPlayingGame);
+
+                    _changePosition('landscapeLeft');
+
+
+                    if (vrm) {
+                        applyAnimation('/bvh/start.bvh', 'waiting', vrm);
+                    }
+                    setTimeout(() => {
+                        console.log(`success${indexIdol + 1}`);
+                        randomBlink(vrm);
+                    }, 3000);
+                },
+
+                // called while loading is progressing
+                (progress) => {
+                    // console.log(('progress', progress.loaded / progress.total) * 100);
+
+                },
+
+                // called when loading has errors
+                (error) => console.log('error121231', error),
+            );
+        }
+
+        function updateExpression(vrmSet) {
+            if (listData != null) {
+                if (vrmSet.firstPerson.meshAnnotations && vrmSet.firstPerson.meshAnnotations.length > 0) {
+                    for (const meshAnnotation of vrmSet.firstPerson.meshAnnotations) {
+                        if (meshAnnotation.meshes && meshAnnotation.meshes[0].name.includes('Face')) {
+                            var listSkinFaceMesh = meshAnnotation.meshes;
+                            Object.keys(listData).forEach(function (key, index) {
+                                var listSkin = listData[key];
+                                var expressionA = vrmSet.expressionManager.getExpression(`${key}A`);
+                                var expressionI = vrmSet.expressionManager.getExpression(`${key}I`);
+                                var expressionU = vrmSet.expressionManager.getExpression(`${key}U`);
+                                var expressionE = vrmSet.expressionManager.getExpression(`${key}E`);
+                                var expressionO = vrmSet.expressionManager.getExpression(`${key}O`);
+                                var vrmNewExpressionA = new VRMExpression(`${key}A`);
+                                var vrmNewExpressionI = new VRMExpression(`${key}I`);
+                                var vrmNewExpressionU = new VRMExpression(`${key}U`);
+                                var vrmNewExpressionE = new VRMExpression(`${key}E`);
+                                var vrmNewExpressionO = new VRMExpression(`${key}O`);
+                                listSkin.forEach(item => {
+                                    var index = item.index;
+                                    var weight = item.weight;
+                                    if (index < 39 || index > 42) {
+                                        vrmNewExpressionA.addBind(new VRMExpressionMorphTargetBind({ index, primitives: listSkinFaceMesh, weight }));
+                                        vrmNewExpressionE.addBind(new VRMExpressionMorphTargetBind({ index, primitives: listSkinFaceMesh, weight }));
+                                        vrmNewExpressionI.addBind(new VRMExpressionMorphTargetBind({ index, primitives: listSkinFaceMesh, weight }));
+                                        vrmNewExpressionO.addBind(new VRMExpressionMorphTargetBind({ index, primitives: listSkinFaceMesh, weight }));
+                                        vrmNewExpressionU.addBind(new VRMExpressionMorphTargetBind({ index, primitives: listSkinFaceMesh, weight }));
+                                    }
+                                });
+                                vrmNewExpressionA.addBind(new VRMExpressionMorphTargetBind({ index: 39, primitives: listSkinFaceMesh, weight: 1 }));
+                                vrmNewExpressionE.addBind(new VRMExpressionMorphTargetBind({ index: 42, primitives: listSkinFaceMesh, weight: 1 }));
+                                vrmNewExpressionI.addBind(new VRMExpressionMorphTargetBind({ index: 40, primitives: listSkinFaceMesh, weight: 1 }));
+                                vrmNewExpressionO.addBind(new VRMExpressionMorphTargetBind({ index: 43, primitives: listSkinFaceMesh, weight: 1 }));
+                                vrmNewExpressionU.addBind(new VRMExpressionMorphTargetBind({ index: 41, primitives: listSkinFaceMesh, weight: 1 }));
+                                vrmNewExpressionA.overrideBlink = "block";
+                                vrmNewExpressionE.overrideBlink = "block";
+                                vrmNewExpressionI.overrideBlink = "block";
+                                vrmNewExpressionO.overrideBlink = "block";
+                                vrmNewExpressionU.overrideBlink = "block";
+                                vrmNewExpressionA.overrideMouth = "block";
+                                vrmNewExpressionE.overrideMouth = "block";
+                                vrmNewExpressionI.overrideMouth = "block";
+                                vrmNewExpressionO.overrideMouth = "block";
+                                vrmNewExpressionU.overrideMouth = "block";
+                                if (expressionA) {
+                                    vrmSet.expressionManager.unregisterExpression(expressionA);
+                                }
+                                if (expressionI) {
+                                    vrmSet.expressionManager.unregisterExpression(expressionI);
+                                }
+                                if (expressionU) {
+                                    vrmSet.expressionManager.unregisterExpression(expressionU);
+                                }
+                                if (expressionE) {
+                                    vrmSet.expressionManager.unregisterExpression(expressionE);
+                                }
+                                if (expressionO) {
+                                    vrmSet.expressionManager.unregisterExpression(expressionO);
+                                }
+                                vrmSet.expressionManager.registerExpression(vrmNewExpressionA);
+                                vrmSet.expressionManager.registerExpression(vrmNewExpressionE);
+                                vrmSet.expressionManager.registerExpression(vrmNewExpressionI);
+                                vrmSet.expressionManager.registerExpression(vrmNewExpressionO);
+                                vrmSet.expressionManager.registerExpression(vrmNewExpressionU);
+                            });
+                            break;
+                        }
+                    }
+
+                }
+            }
+        };
+
+        // let isProcessed = true;
+        // let lastTimeUpdateMotion = 0;
+
+        // let isFading = false;
+        // let loading = false;
+        // let currentAction;
+        // let pendingAnimation = null;
+
+        function applyAnimation(bvhFilePath, animationName, vrmSet, motionSecond) {
+            console.log('motionSecond1', bvhFilePath)
+            console.log('motionSecond2', vrmSet.currentBvhFilePath)
+            if (!vrmSet) return; // VRMがロードされていなければ何もしない
+            var mixer = vrmSet.mixer; // VRMがロードされていなければ何もしない
+            if (vrmSet.currentBvhFilePath === bvhFilePath) return;
+            // console.log(currentBvhFilePath);
+            if (mapAction.get(bvhFilePath)) {
+                console.log('haveFile');
+                if (!mixer) {
+                    mixer = new THREE.AnimationMixer(vrmSet.scene);
+                    vrmSet.mixer = mixer;
+                }
+                // const startAction = mapAction.get(currentBvhFilePath)
+                // const endAction = mapAction.get(bvhFilePath);
+                if (vrmSet.isFading || vrmSet.loading) {
+
+                    vrmSet.pendingAnimation = bvhFilePath;
+                    return;
+                }
+                synchronizeCrossFade(bvhFilePath, 1, vrmSet);
+                vrmSet.currentBvhFilePath = bvhFilePath;
+
+            } else {
+                console.log('Dont`t haveFile');
+
+                vrmSet.loading = true;
+                const loader1 = new BVHLoader();
+
+                loader1.load(bvhFilePath, function (result) {
+                    for (let i = result.clip.tracks.length; i--;) {
+                        var distance = 0;
+                        var firstValue = 0;
+                        let track = result.clip.tracks[i];
+                        var value = [];
+                        var extension = track.name.split('.').pop();
+                        // console.log(track.name);
+                        // console.log(extension);
+                        let map = new Map(Object.entries(vrmSet.humanoid.humanBones));
+                        var exists = Array.from(map.keys()).find(obj => {
+                            return track.name.toLowerCase().includes(obj.toLowerCase())
+                        });
+                        if (exists) {
+                            if (extension) {
+                                track.name = `${map.get(exists).node.name}.${extension}`
+                            } else {
+                                track.name = `${map.get(exists).node.name}`
+                            }
+                        };
+                        if (track.name.toLowerCase().match(/.+\.([^?]+)(\?|$)/)[1] === "position") {
+                            if (["J_Bip_C_Hips.position"].includes(track.name)) {
+                                for (let i = 0; i < track.values.length; i++) {
+                                    if (i % 3 === 2 || i % 3 === 0) {
+                                        track.values[i] = 0;
+                                    } else {
+                                        if (i == 1) {
+                                            firstValue = track.values[i];
+                                            distance = 0;
+                                            if (vrmSet.initialPosition) {
+                                                distance = vrmSet.initialPosition.y - firstValue;
+                                            }
+                                        }
+                                        track.values[i] = track.values[i] + distance;
+                                    }
+                                }
+                                continue;
+                            } else {
+                                result.clip.tracks.splice(i, 1);
+                            }
+                        } else {
+                            if ([].includes(track.name)) {
+                                result.clip.tracks.splice(i, 1);
+                            } else {
+                                for (var trackValue of track.values) {
+                                    var trackValueNew = trackValue;
+                                    if (track.values.indexOf(trackValue) % 4 == 3) {
+                                        trackValueNew = -trackValue;
+                                    }
+                                    if (track.values.indexOf(trackValue) % 4 == 1) {
+                                        trackValueNew = -trackValue;
+                                    }
+                                    value.push(trackValueNew);
+                                }
+                            }
+                            track.values = value;
+                            track.values.splice(0, 4);
+                            track.times = track.times.subarray(1);
+                        }
+                    }
+                    // console.log(result.clip);
+                    // console.log(value.map((e)=> e.name));
+                    // AnimationMixerの生成
+                    if (!mixer) {
+                        mixer = new THREE.AnimationMixer(vrmSet.scene);
+                        vrmSet.mixer = mixer;
+                    }
+                    var animationClip = result.clip;
+                    animationClip.name = bvhFilePath;
+                    animationClip.duration = calculateDuration(result.clip);
+                    console.log('duration', animationClip.duration);
+                    // const action = mixer.clipAction(animationClip);
+                    // action.setLoop(THREE.LoopRepeat);
+                    // action.clampWhenFinished = false;
+                    // action.play();
+                    // const startAction = mapAction.get(currentBvhFilePath);
+                    vrmSet.loading = false;
+                    if (vrmSet.isFading || vrmSet.loading) {
+
+                        vrmSet.pendingAnimation = bvhFilePath;
+                        return;
+                    }
+                    mapAction.set(bvhFilePath, animationClip);
+
+                    synchronizeCrossFade(bvhFilePath, 1, vrmSet);
+                    vrmSet.currentBvhFilePath = bvhFilePath;
+
+                    // console.log( vrm );
+                    // animationClip = createClip(currentVrm, bvh);
+                    // animationClip.name = animationName;
+                    // mixer = new THREE.AnimationMixer(currentVrm.scene);
+                    // const action = mixer.clipAction(animationClip);
+                    // action.setLoop(THREE.LoopRepeat);
+                    // action.clampWhenFinished = false;
+                    // mixer.clipAction(animationClip).setEffectiveWeight(1.0).play();
+                },
+                    undefined, // Bạn có thể thêm một hàm callback cho sự kiện tiến trình tải ở đây nếu cần
+                    function (error) {
+                        // Xử lý khi có lỗi
+                        console.log("motionSecond", bvhFilePath);
+
+                        console.log("motionSecond", motionSecond);
+                        if (motionSecond) {
+                            applyAnimation(motionSecond, animationName, vrmSet)
+                        } else {
+                            applyAnimation(vrmSet.currentBvhFilePath, animationName, vrmSet)
+                        }
+                    });
+            }
+
+        }
+
+
+        function getRandomBlinkDuration() {
+            let randomDuration = 1000 + Math.floor(Math.random() * 9000);
+            return randomDuration;
+        }
+
+        function synchronizeCrossFade(bvhFilePath, duration, vrmSet) {
+            var currentDate = new Date().getTime();
+            if ((currentDate - vrmSet.lastTimeUpdateMotion) < 1000) {
+                return;
+            }
+            vrmSet.lastTimeUpdateMotion = currentDate;
+            // console.log("synchronizeCrossFade", new Date().toISOString());
+            // console.log("startAction", startAction);
+            const loadAndApply = (clip) => {
+                if (vrmSet.currentAction) {
+                    vrmSet.currentAction.fadeOut(duration);
+                    vrmSet.isFading = true;
+                    // console.log("synchronizeCrossFade3", duration * 1000);
+                    setTimeout(() => {
+                        console.log('pendingAnimation');
+                        vrmSet.isFading = false;
+                        if (vrmSet.pendingAnimation) {
+                            applyAnimation(
+                                vrmSet.pendingAnimation,
+                                vrmSet.pendingAnimation.animationName,
+                                vrmSet
+                            );
+                            vrmSet.pendingAnimation = null;
+                        }
+                    }, duration * 1000);
+                }
+
+                const newAction = vrmSet.mixer.clipAction(clip);
+                newAction.setLoop(THREE.LoopRepeat);
+                newAction.clampWhenFinished = false;
+                newAction.reset();
+                newAction.fadeIn(duration);
+                newAction.play();
+
+                vrmSet.currentAction = newAction;
+            };
+            console.log("synchronizeCrossFade1", mapAction.has(bvhFilePath));
+            if (mapAction.has(bvhFilePath)) {
+                loadAndApply(mapAction.get(bvhFilePath));
+            }
+
+        }
+
+        function isSameType(pendingAnimation) {
+            var pendingNotNumber = pendingAnimation.replace(/[0-9]/g, '').replace('.bvh', '');
+            var currentNotNumber = currentBvhFilePath.replace(/[0-9]/g, '').replace('.bvh', '');
+            console.log(pendingNotNumber === currentNotNumber);
+            return pendingNotNumber === currentNotNumber;
+        }
+
+        function calculateDuration(bvhClip) {
+            const frames = bvhClip.tracks[0].times.length;
+            const frameTime = bvhClip.tracks[0].times[1] - bvhClip.tracks[0].times[0];
+            return frames * frameTime;
+        }
+
+        function _changePosition(orientation) {
+            var typeOrientation = 'portraitUp';
+
+            if (orientation) {
+                typeOrientation = orientation;
+            } else {
+                typeOrientation = currentTypeOrientation;
+            }
+            // console.log('_changePosition', typeOrientation);
+            // console.log('_changePosition', currentVrm.length);
+            if (typeOrientation == 'portraitUp' || typeOrientation == 'portraitDown') {
+
+                if (currentVrm.length == 1) {
+                    if (window.isPlayingGame) {
+                        currentVrm[0].scene.position.set(0.08, -0.25, 0);
+                    }
+                    currentVrm[0].scene.position.set(1.2, -0.3, 1);
+                    currentVrm[0].scene.rotation.set(0, 0.3, 0);
+                    currentVrm[0].scene.scale.set(1, 1, 1);
+                }
+                if (currentVrm.length == 2) {
+                    currentVrm[0].scene.position.set(0.26, -0.40, 1);
+                    currentVrm[1].scene.position.set(-0.26, -0.40, 1);
+                }
+            } else if (typeOrientation == 'landscapeLeft') {
+                console.log('landscapeLeft................')
+                console.log(currentVrm.length)
+                if (currentVrm.length == 1) {
+                    if (window.isPlayingGame) {
+                        currentVrm[0].scene.position.set(-0.4, 0, -0.4);
+                        currentVrm[0].scene.rotation.set(0, -0.4, 0);
+                    } else {
+                        currentVrm[0].scene.position.set(0.2, -0.3, 1);
+                        currentVrm[0].scene.rotation.set(0, 0, 0);
+                        currentVrm[0].scene.scale.set(1, 1, 1);
+                    }
+                }
+
+                if (currentVrm.length == 2) {
+                    currentVrm[0].scene.position.set(-0.4, 0, -0.4);
+                    currentVrm[0].scene.rotation.set(0, -0.4, 0);
+                    currentVrm[1].scene.position.set(0.3, 0, -0.4);
+                    currentVrm[1].scene.rotation.set(0, 0.4, 0);
+                }
+            } else if (typeOrientation == 'landscapeRight') {
+                if (window.isPlayingGame) {
+                    currentVrm[0].scene.position.set(-0.4, 0, -0.4);
+                    currentVrm[0].scene.rotation.set(0, -0.4, 0);
+                } else {
+                    currentVrm[0].scene.rotation.set(0, 0, 0);
+                }
+                if (currentVrm.length == 2) {
+                    currentVrm[0].scene.position.set(-0.4, 0, -0.2);
+                    currentVrm[0].scene.rotation.set(0, -0.4, 0);
+                    currentVrm[1].scene.position.set(0.3, 0, -0.2);
+                    currentVrm[1].scene.rotation.set(0, 0.4, 0);
+                }
+            }
+            if (orientation) {
+                currentTypeOrientation = orientation;
+            }
+        }
+
+        // var isStartSetVoice = false;
+
+        function voice(mora, timeoutId, vrmSet) {
+            // console.log('startPlaying', mora)
+            // console.log('startPlaying', listMoraTimeOut.includes(timeoutId))
+
+            if (vrmSet && vrmSet.expressionManager) {
+                if (!vrmSet.listMoraTimeOut.includes(timeoutId)) {
+                    return;
+                }
+                if (vrmSet.currentFacial != '' && vrmSet.currentFacial.includes('Param')) {
+                    resetMouth(vrmSet);
+                    if (mora == "a" || mora == "i" || mora == "e" || mora == "o" || mora == "u") {
+                        resetParam(vrmSet.currentFacial, vrmSet);
+                    }
+                    resetBlink(vrmSet);
+                    resetEmotion(vrmSet);
+                    resetAnotherParam(vrmSet.currentFacial, vrmSet)
+                }
+                if (!vrmSet.listMoraTimeOut.includes(timeoutId)) {
+                    return;
+                }
+                // console.log('startPlaying', isStartSetVoice)
+                if (vrmSet.isStartSetVoice) return;
+                vrmSet.isStartSetVoice = true;
+                if (mora == "a") {
+                    if (vrmSet.currentFacial != '' && vrmSet.currentFacial.includes('Param') && /\d/.test(vrmSet.currentFacial)) {
+                        vrmSet.expressionManager.setValue(`${vrmSet.currentFacial}A`, 1);
+                    } else {
+                        vrmSet.expressionManager.setValue("aa", 0.8);
+                        vrmSet.expressionManager.setValue("ih", 0);
+                        vrmSet.expressionManager.setValue("ee", 0);
+                        vrmSet.expressionManager.setValue("oh", 0);
+                        vrmSet.expressionManager.setValue("ou", 0);
+                    }
+                } else if (mora == "i") {
+                    if (vrmSet.currentFacial != '' && vrmSet.currentFacial.includes('Param') && /\d/.test(vrmSet.currentFacial)) {
+                        vrmSet.expressionManager.setValue(`${vrmSet.currentFacial}I`, 1);
+                    } else {
+                        vrmSet.expressionManager.setValue("aa", 0);
+                        vrmSet.expressionManager.setValue("ih", 0.8);
+                        vrmSet.expressionManager.setValue("ee", 0);
+                        vrmSet.expressionManager.setValue("oh", 0);
+                        vrmSet.expressionManager.setValue("ou", 0);
+                    }
+                } else if (mora == "e") {
+                    if (vrmSet.currentFacial != '' && vrmSet.currentFacial.includes('Param') && /\d/.test(vrmSet.currentFacial)) {
+                        vrmSet.expressionManager.setValue(`${vrmSet.currentFacial}E`, 1);
+                    } else {
+                        vrmSet.expressionManager.setValue("aa", 0);
+                        vrmSet.expressionManager.setValue("ih", 0);
+                        vrmSet.expressionManager.setValue("ee", 0.8);
+                        vrmSet.expressionManager.setValue("oh", 0);
+                        vrmSet.expressionManager.setValue("ou", 0);
+                    }
+                } else if (mora == "o") {
+                    if (vrmSet.currentFacial != '' && vrmSet.currentFacial.includes('Param') && /\d/.test(vrmSet.currentFacial)) {
+                        vrmSet.expressionManager.setValue(`${vrmSet.currentFacial}O`, 1);
+                    } else {
+                        vrmSet.expressionManager.setValue("aa", 0);
+                        vrmSet.expressionManager.setValue("ih", 0);
+                        vrmSet.expressionManager.setValue("ee", 0);
+                        vrmSet.expressionManager.setValue("oh", 0.8);
+                        vrmSet.expressionManager.setValue("ou", 0);
+                    }
+                } else if (mora == "u") {
+                    if (vrmSet.currentFacial != '' && vrmSet.currentFacial.includes('Param') && /\d/.test(vrmSet.currentFacial)) {
+                        vrmSet.expressionManager.setValue(`${vrmSet.currentFacial}U`, 1);
+                    } else {
+                        vrmSet.expressionManager.setValue("aa", 0);
+                        vrmSet.expressionManager.setValue("ih", 0);
+                        vrmSet.expressionManager.setValue("ee", 0);
+                        vrmSet.expressionManager.setValue("oh", 0);
+                        vrmSet.expressionManager.setValue("ou", 0.8);
+                    }
+                } else {
+                    vrmSet.expressionManager.setValue("aa", 0);
+                    vrmSet.expressionManager.setValue("ih", 0);
+                    vrmSet.expressionManager.setValue("ee", 0);
+                    vrmSet.expressionManager.setValue("oh", 0);
+                    vrmSet.expressionManager.setValue("ou", 0);
+                }
+                vrmSet.isStartSetVoice = false;
+            }
+        }
+
+        function resetMouth(vrmSet) {
+            vrmSet.expressionManager.setValue("aa", 0);
+            vrmSet.expressionManager.setValue("ih", 0);
+            vrmSet.expressionManager.setValue("ee", 0);
+            vrmSet.expressionManager.setValue("oh", 0);
+            vrmSet.expressionManager.setValue("ou", 0);
+        }
+
+        function resetAllParam(vrmSet) {
+            console.log('resetAllParam');
+            if (listData) {
+                Object.keys(listData).forEach(function (key, index) {
+                    vrmSet.expressionManager.setValue(`${key}A`, 0);
+                    vrmSet.expressionManager.setValue(`${key}I`, 0);
+                    vrmSet.expressionManager.setValue(`${key}U`, 0);
+                    vrmSet.expressionManager.setValue(`${key}E`, 0);
+                    vrmSet.expressionManager.setValue(`${key}O`, 0);
+
+                });
+            }
+        }
+
+        function resetParam(param, vrmSet) {
+            vrmSet.expressionManager.setValue(`${param}A`, 0);
+            vrmSet.expressionManager.setValue(`${param}I`, 0);
+            vrmSet.expressionManager.setValue(`${param}U`, 0);
+            vrmSet.expressionManager.setValue(`${param}E`, 0);
+            vrmSet.expressionManager.setValue(`${param}O`, 0);
+        }
+
+        function resetAnotherParam(param, vrmSet) {
+            if (listData) {
+                Object.keys(listData).forEach(function (key, index) {
+                    if (key != param) {
+                        vrmSet.expressionManager.setValue(`${key}A`, 0);
+                        vrmSet.expressionManager.setValue(`${key}I`, 0);
+                        vrmSet.expressionManager.setValue(`${key}U`, 0);
+                        vrmSet.expressionManager.setValue(`${key}E`, 0);
+                        vrmSet.expressionManager.setValue(`${key}O`, 0);
+                    }
+
+                });
+            }
+        }
+
+        function updateEmotion(vrmSet) {
+            vrmSet.expressionManager.getExpression(`happy`).overrideBlink = "block";
+            vrmSet.expressionManager.getExpression(`neutral`).overrideBlink = "block";
+            vrmSet.expressionManager.getExpression(`relaxed`).overrideBlink = "block";
+            vrmSet.expressionManager.getExpression(`Surprised`).overrideBlink = "block";
+            vrmSet.expressionManager.getExpression(`sad`).overrideBlink = "block";
+            vrmSet.expressionManager.getExpression(`angry`).overrideBlink = "block";
+        }
+
+
+        function resetEmotion(vrmSet) {
+            vrmSet.expressionManager.setValue("neutral", 0);
+            vrmSet.expressionManager.setValue("relaxed", 0);
+            vrmSet.expressionManager.setValue("sad", 0);
+            vrmSet.expressionManager.setValue("happy", 0);
+            vrmSet.expressionManager.setValue("Surprised", 0);
+            vrmSet.expressionManager.setValue("angry", 0);
+        }
+
+        function resetBlink(vrmSet) {
+            vrmSet.isBlink = false;
+            // console.log("valueBlink", "resetBlink");
+            vrmSet.listTimeOutBlink.forEach(timeoutId => {
+                clearTimeout(timeoutId);
+            });
+            vrmSet.listTimeOutBlink.length = 0;
+            vrmSet.expressionManager.setValue("blink", 0);
+            vrmSet.expressionManager.setValue("blinkLeft", 0);
+            vrmSet.expressionManager.setValue("blinkRight", 0);
+        }
+
+        function blink(vrmSet) {
+            if (vrmSet.playing) {
+                return;
+            }
+            resetAnotherParam(vrmSet.currentFacial, vrmSet)
+            if (vrmSet.playing) {
+                return;
+            }
+            resetBlink(vrmSet);
+            if (vrmSet.playing) {
+                return;
+            }
+            resetEmotion(vrmSet);
+            if (vrmSet.playing) {
+                return;
+            }
+            vrmSet.isBlink = true;
+            // console.log('blink');
+            var count = 14;
+            var timeReset = 400;
+            var value = 1 / (count / 2);
+            var timeTimeout = timeReset / count;
+            for (let index = 0; index < count / 2; index++) {
+                var timeOut = setTimeout(() => {
+                    if (vrmSet.isBlink && vrmSet) {
+                        var valueBlink = vrmSet.expressionManager.getValue("blink");
+                        if (valueBlink >= 0 && valueBlink < 1) {
+                            vrmSet.expressionManager.setValue("blink", valueBlink < 1 ? valueBlink + value : 1);
+                        }
+                    }
+                }, index * timeTimeout);
+                vrmSet.listTimeOutBlink.push(timeOut);
+            }
+            for (let index = count / 2 + 2; index < count; index++) {
+                var timeOut = setTimeout(() => {
+                    if (vrmSet.isBlink && vrmSet) {
+                        var valueBlink = vrmSet.expressionManager.getValue("blink");
+                        // console.log('valueBlink3', valueBlink);
+                        vrmSet.expressionManager.setValue("blink", valueBlink > value ? valueBlink - value : 0);
+                        // console.log('valueBlink4', valueBlink);
+                    }
+                }, index * timeTimeout);
+                vrmSet.listTimeOutBlink.push(timeOut);
+            }
+            // blink();
+            // currentVrm.expressionManager.setValue("blink", 1);
+            setTimeout(() => {
+                resetBlink(vrmSet);
+            }, timeReset);
+        }
+
+        function addHours(date, hours) {
+            date.setTime(date.getTime() + hours * 60 * 60 * 1000);
+
+            return date;
+        }
+
+        function getCurrentTypeHour(japanTimeNow) {
+            let currentHour = japanTimeNow.getHours();
+            console.log('currentHour', currentHour);
+            if (currentHour >= 6 && currentHour < 18) {
+                return listBackground[0];
+            }
+            return listBackground[1];
+        }
+
+        // function randomBlink(){
+        //     console.log("randomBlink",parameterBlink );
+        //     const randomNumber = Math.floor(Math.random() * parameterBlink.length);
+        //     const parameter = parameterBlink[randomNumber];
+        //     console.log(parameter);
+        //     if (currentVrm) {
+        //         console.log("abc");
+        //         console.log("blink", parameter.blink);
+        //         console.log("blink", parameter.blinkLeft);
+        //         console.log("blink", parameter.blinkRight);
+        //         currentVrm.expressionManager.setValue("blink", parameter.blink);
+        //         currentVrm.expressionManager.setValue("blinkLeft", parameter.blinkLeft);
+        //         currentVrm.expressionManager.setValue("blinkRight", parameter.blinkRight);
+        //     }
+        // }
+
+        // function resetBlink(){
+        //     const randomNumber = Math.floor(Math.random() * parameterBlink.length);
+        //     const parameter = parameterBlink[randomNumber];
+        //     if (currentVrm) {  
+        //         currentVrm.expressionManager.setValue("blink", 0);
+        //         currentVrm.expressionManager.setValue("blinkLeft", 0);
+        //         currentVrm.expressionManager.setValue("blinkRight", 0);
+        //     }
+        // }
+
+        function randomBlink(vrmSet) {
+            var randomValue = Math.floor(Math.random() * 3) + 4;
+            setTimeout(() => {
+                randomBlink(vrmSet);
+            }, randomValue * 1000);
+            if (!vrmSet.playing) {
+                if (vrmSet) {
+                    blink(vrmSet);
+                }
+            }
+        }
+
+        animate();
+        function animate() {
+
+            requestAnimationFrame(animate);
+            // setTimeout(() => {
+            //     animate();
+            // }, speedAnimate * 1000)
+
+            let mixerUpdateDelta = clock.getDelta();
+
+            let time = new Date().getTime();
+            renderer.render(scene, camera);
+
+            for (const vrmSet of currentVrm) {
+                if (vrmSet.springBoneManager) {
+                    vrmSet.springBoneManager.update(10 / 1000);
+                }
+                if (vrmSet.mixer) {
+                    vrmSet.mixer.update(speedAnimate * ratioAnimate);
+                }
+                if (vrmSet && vrmSet.expressionManager) {
+                    vrmSet.expressionManager.update();
+                }
+            }
+
+        }
+    </script>
+    <script>
+
+    </script>
+    <div id="imageContainer">
+    </div>
+</body>
+
+</html>

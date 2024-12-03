@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js Example</title>
+    <script async src="https://unpkg.com/es-module-shims@1.3.6/dist/es-module-shims.js"></script>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.154.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.154.0/examples/jsm/",
+          "@pixiv/three-vrm": "/lib/three-vrm.module.js"
+        }
+      }
+    </script>
+    <style>
+        body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: transparent !important;
+        }
+
+        #backgroundVideo {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: -1;
+            /* Đặt video phía sau các nội dung khác */
+        }
+
+        #backgroundImage {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: -1;
+            /* Đặt video phía sau các nội dung khác */
+        }
+
+        .zoom {
+            transform: scale(1.5);
+            /* Phóng to 1.5 lần */
+            transform-origin: center center;
+            /* Đặt điểm gốc của phép biến đổi */
+            transition: transform 1.5s ease;
+            /* Thêm hiệu ứng chuyển đổi */
+        }
+
+        .zoom-out {
+            transform: scale(1);
+            /* Thu nhỏ lại về kích thước ban đầu */
+            transform-origin: center center;
+            /* Đặt điểm gốc của phép biến đổi */
+            transition: transform 1.5s ease;
+            /* Thêm hiệu ứng chuyển đổi */
+        }
+
+        .animation {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <image id="backgroundImage">
+
+    </image>
+    <video id="backgroundVideo">
+        <source src="" type="video/mp4">
+        Your browser does not support the video tag.
+    </video>
+    <div id="background"></div>
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { BVHLoader } from 'three/addons/loaders/BVHLoader.js';
+        import { VRMLoaderPlugin, VRMUtils, VRM, VRMExpression, VRMExpressionMorphTargetBind } from '@pixiv/three-vrm';
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+        import { getFirestore, collection, doc, query, where, limit, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight); // Thiết lập kích thước canvas
+        document.body.appendChild(renderer.domElement); // Gắn renderer vào body
+
+        // Tạo một khối lập phương (cube)
+        const geometry = new THREE.BoxGeometry(1, 1, 1); // Kích thước cube 1x1x1
+        const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 }); // Màu sắc của cube
+        const cube = new THREE.Mesh(geometry, material); // Kết hợp geometry và material để tạo ra đối tượng mesh
+        scene.add(cube); // Thêm cube vào cảnh
+
+        // Đặt vị trí camera sao cho cube có thể nhìn thấy được
+        camera.position.z = 5;
+
+        // Hàm animate để cập nhật và vẽ lại khung cảnh mỗi khi có thay đổi
+        function animate() {
+            requestAnimationFrame(animate); // Yêu cầu tiếp tục vẽ lại cảnh mỗi khung hình
+
+            // Quay cube để tạo hiệu ứng hoạt hình
+            cube.rotation.x += 0.01;
+            cube.rotation.y += 0.01;
+
+            // Vẽ lại cảnh từ vị trí camera
+            renderer.render(scene, camera);
+        }
+
+        // Bắt đầu animation
+        animate();
+
+        // // Điều chỉnh lại kích thước của canvas khi thay đổi kích thước cửa sổ
+        // window.addEventListener('resize', () => {
+        //     renderer.setSize(window.innerWidth, window.innerHeight);
+        //     camera.aspect = window.innerWidth / window.innerHeight;
+        //     camera.updateProjectionMatrix();
+        // });
+
+    </script>
+    <script>
+
+    </script>
+    <div id="imageContainer">
+    </div>
+</body>
+
+</html>
