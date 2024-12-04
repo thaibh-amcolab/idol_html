@@ -81,7 +81,7 @@
             border: none;
             height: 100vh; /* Fixed height for iframe */
             width: 100%;
-            z-index: -10;
+            z-index: -5;
         }
         #site-container {
             position: relative;
@@ -119,14 +119,29 @@
     <div id="background"></div>
 
     <script>
+        
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { BVHLoader } from 'three/addons/loaders/BVHLoader.js';
+        import { VRMLoaderPlugin, VRMUtils, VRM, VRMExpression, VRMExpressionMorphTargetBind } from '@pixiv/three-vrm';
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+        import { getFirestore, collection, doc, query, where, limit, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+        
         const targetUrl = 'https://www.oshimaya.jp/';
+        const iframe = document.getElementById('site-iframe');
 
         document.addEventListener('DOMContentLoaded', () => {
-            const iframe = document.getElementById('site-iframe');
             const targetUrl = 'https://www.oshimaya.jp/';
-            iframe.src = `http://localhost:3001/proxy?url=${encodeURIComponent(targetUrl)}&device=mobile`;
-            console.log(`http://localhost:3001/proxy?url=${encodeURIComponent(targetUrl)}`)
+            iframe.src = `http://localhost:3001/proxy?url=${encodeURIComponent(targetUrl)}`;
         });
+
+        function updateIframeSrc(url, type) {
+            console.log(`http://localhost:3001/proxy?url=${encodeURIComponent(url)}&device=${type}`)
+            iframe.src = `http://localhost:3001/proxy?url=${encodeURIComponent(url)}&device=${type}`;
+        }
 
         function scrollIframe(iframe, x, y, duration = 1000) {
             console.log('scrollIframe started ')
@@ -167,16 +182,15 @@
             iframe.contentWindow.postMessage({ scrollX: x, scrollY: y }, `http://localhost:3001/proxy?url=${encodeURIComponent(targetUrl)}&device=mobile`);
         }
 
-        const iframe = document.getElementById('site-iframe');
-
         // Example usage: Scroll by 500px right and 300px down over 2 seconds
-        iframe.onload = () => {
-            console.log('iframe loaded')
-            // sendScrollMessage(500, 0);
+        // iframe.onload = () => {
+        //     console.log('iframe loaded')
             
-            // Example: chaining scroll commands with different timings
-            // setTimeout(() => scrollIframe(iframe, -200, -100, 1000), 3000);
-        };
+        //     setTimeout(() => sendScrollMessage(500, 0), 3000);
+            
+        //     // Example: chaining scroll commands with different timings
+        //     setTimeout(() => scrollIframe(iframe, -200, -100, 1000), 3000);
+        // };
 
 
         function resizeIframe(width, height, offsetX = 0, offsetY = 0, zoom = 1) {
@@ -206,16 +220,7 @@
       
         // Example usage:
         // resizeIframe(1200, 800, 100, 50, 1.2); // Width, Height, Offset X, Offset Y, Zoom
-    </script>
 
-    <script type="module">
-        import * as THREE from 'three';
-        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-        import { BVHLoader } from 'three/addons/loaders/BVHLoader.js';
-        import { VRMLoaderPlugin, VRMUtils, VRM, VRMExpression, VRMExpressionMorphTargetBind } from '@pixiv/three-vrm';
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-        import { getFirestore, collection, doc, query, where, limit, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
-        
         const queryString = window.location.search;
         const urlParams = new URLSearchParams(queryString);
  
@@ -224,59 +229,72 @@
         const imageElement = document.getElementById('backgroundImage');
         let currentBackgroundImage = '';
         imageElement.style.display = 'none';
+        console.log('keySchedule', keySchedule);
+        console.log('liveStreamRoomId', liveStreamRoomId);
 
-        // const firebaseConfig = {
-        //     apiKey: "AIzaSyBdrmWY--ZZJhQhxOG8erv69nU1CIn6chQ",
-        //     authDomain: "ai-impulse-app.firebaseapp.com",
-        //     projectId: "ai-impulse-app",
-        //     storageBucket: "ai-impulse-app.appspot.com",
-        //     messagingSenderId: "849392574825",
-        //     appId: "1:849392574825:web:4224482ba13e5ac9b85df8",
-        //     measurementId: "G-05JEFGRE9Z"
-        // };
+        const firebaseConfig = {
+            apiKey: "AIzaSyBdrmWY--ZZJhQhxOG8erv69nU1CIn6chQ",
+            authDomain: "ai-impulse-app.firebaseapp.com",
+            projectId: "ai-impulse-app",
+            storageBucket: "ai-impulse-app.appspot.com",
+            messagingSenderId: "849392574825",
+            appId: "1:849392574825:web:4224482ba13e5ac9b85df8",
+            measurementId: "G-05JEFGRE9Z"
+        };
 
         // Initialize Firebase
-        // const app = initializeApp(firebaseConfig);
-        // const db = getFirestore(app);
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
 
-        // const settingCollection = collection(db, 'setting');
-        // const dataDoc = doc(settingCollection, keySchedule);
-        // const dataCollection = collection(dataDoc, 'data')backgroundImage;
-        // const livestreamingQuery = doc(dataCollection, liveStreamRoomId);
-        // try {
-        //     onSnapshot(livestreamingQuery, (snapshot) => {
-        //         if (snapshot.exists()) {
-        //             const data = change.data();
-        //             const backgroundImageTemp = data.background_link;
-        //             if (backgroundImageTemp) {
-        //                 backgroundImage = backgroundImageTemp;
-        //                 updateCurrentBackground(backgroundImage);
-        //             }
-        //             const backgroundVideo = data.background_video;
-        //             window.linkImage = backgroundVideo;
-        //             console.log('backgroundVideo', backgroundVideo);
-        //             const videoElement = document.getElementById('backgroundVideo');
-        //             const imageElement = document.getElementById('backgroundImage');
-        //             if (!window.linkImage) {
-        //                 videoElement.style.display = 'none';
-        //                 imageElement.style.display = 'none';
-        //             } else {
-        //                 if (isVideo(window.linkImage)) {
-        //                     videoElement.style.display = 'block';
-        //                     imageElement.style.display = 'none';
-        //                 } else {
-        //                     imageElement.src = backgrobackgroundImageundVideo;
-        //                     videoElement.style.display = 'none';
-        //                     imageElement.style.display = 'block';
-        //                 }
-        //             }
-        //         } else {
-        //             console.log('No such document!');
-        //         }backgroundImage
-        //     });
-        // } catch (e) {
-        //     console.log(e);
-        // }
+        const settingCollection = collection(db, 'setting');
+        const dataDoc = doc(settingCollection, keySchedule);
+        const dataCollection = collection(dataDoc, 'data');
+        const livestreamingQuery = doc(dataCollection, liveStreamRoomId);
+        try {
+            onSnapshot(livestreamingQuery, (snapshot) => {
+                console.log(snapshot);
+                if (snapshot.exists()) {
+                    const data = snapshot.data();
+                    const backgroundImageTemp = data.background_link;
+                    if (backgroundImageTemp) {
+                        backgroundImage = backgroundImageTemp;
+                        updateCurrentBackground(backgroundImage);
+                    }
+                    const backgroundVideo = data.background_video;
+                    const typeBackgroundWeb = data.type_background_web;
+                    const background_web = data.background_web;
+                    window.linkImage = backgroundVideo;
+                    console.log('backgroundVideo', backgroundVideo);
+                    console.log('typeBackgroundWeb', typeBackgroundWeb);
+                    console.log('background_web', background_web);
+
+                    const videoElement = document.getElementById('backgroundVideo');
+                    const imageElement = document.getElementById('backgroundImage');
+                    if (background_web) {
+                        videoElement.style.display = 'none';
+                        imageElement.style.display = 'none';
+                        updateIframeSrc(background_web, typeBackgroundWeb);
+                    }
+                    if (!window.linkImage) {
+                        videoElement.style.display = 'none';
+                        imageElement.style.display = 'none';
+                    } else {
+                        if (isVideo(window.linkImage)) {
+                            videoElement.style.display = 'block';
+                            imageElement.style.display = 'none';
+                        } else {
+                            imageElement.src = backgrobackgroundImageundVideo;
+                            videoElement.style.display = 'none';
+                            imageElement.style.display = 'block';
+                        }
+                    }
+                } else {
+                    console.log('No such document!');
+                }
+            });
+        } catch (e) {
+            console.log(e);
+        }
         console.log('1');
         let currentVrm = [];
         let clock = new THREE.Clock();
@@ -1391,8 +1409,8 @@
             } else {
                 typeOrientation = currentTypeOrientation;
             }
-            // console.log('_changePosition', typeOrientation);
-            // console.log('_changePosition', currentVrm.length);
+            console.log('_changePosition', typeOrientation);
+            console.log('_changePosition', currentVrm.length);
             if (typeOrientation == 'portraitUp' || typeOrientation == 'portraitDown') {
 
                 if (currentVrm.length == 1) {
