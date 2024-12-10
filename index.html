@@ -118,10 +118,6 @@
       </div>
     <div id="background"></div>
 
-    <script>
-        
-    </script>
-
     <script type="module">
         import * as THREE from 'three';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -221,12 +217,191 @@
         // Example usage:
         // resizeIframe(1200, 800, 100, 50, 1.2); // Width, Height, Offset X, Offset Y, Zoom
 
+        let backgroundState = {
+            object: null,
+            obj_type: null,
+            obj_action: null,
+            obj_effect: null
+        };
+
+        const imageElement = document.getElementById('backgroundImage');
+        const videoElement = document.getElementById('backgroundVideo');
+        const backgroundWeb = document.getElementById('backgroundWeb');
+        const backgroundDiv = document.getElementById('background');
+
+        function applyTransitionEffect(effect) {
+            switch(effect) {
+                case 'blur':
+                    imageElement.style.transition = 'filter 0.5s ease';
+                    imageElement.style.filter = 'blur(10px)';
+                    setTimeout(() => {
+                        imageElement.style.filter = 'blur(0)';
+                    }, 500);
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        function resetAllBackgrounds(obj_type) {
+            if (obj_type === 'url' || obj_type === 'image') {
+                imageElement.style.display = 'none';
+                videoElement.style.display = 'none';
+                backgroundWeb.style.display = 'none';
+                backgroundDiv.style.display = 'none';
+            }
+        }
+
+        function updateBackground(data) {
+            const hasChanged =
+                data.object !== backgroundState.object ||
+                data.obj_type !== backgroundState.obj_type ||
+                data.obj_action !== backgroundState.obj_action ||
+                data.obj_effect !== backgroundState.obj_effect;
+
+            if (!hasChanged) {
+                console.log('No changes in background data');
+                return;
+            }
+
+            resetAllBackgrounds(data.obj_type);
+
+            switch (data.obj_type) {
+                case 'url':
+                    if (iframe.src !== data.object) {
+                        updateIframeSrc(data.object, 'horizontal');
+                        backgroundWeb.style.display = 'block';
+                    }
+                    break;
+
+                case 'image':
+                    if (imageElement.src !== data.object) {
+                        if (data.obj_effect) {
+                            applyTransitionEffect(data.obj_effect);
+                        }
+                        imageElement.src = data.object;
+                        imageElement.style.display = 'block';
+                    }
+                    break;
+
+                case 'tag':
+                    if (data.obj_action === 'scroll') {
+                        if (backgroundWeb.style.display === 'block') {
+                            scrollToElementInIframe(data.object)
+                        } else {
+                            console.warn('Cannot scroll: No iframe is currently displayed');
+                        }
+                    }
+                    break;
+            }
+
+            backgroundState = { ...data };
+        }
+
+        // socket.on(`changeBackground${idolId}`, (data) => {
+        //     console.log('Background change data:', data);
+        //     updateBackground(data);
+        // });
+
+        // Test changing background
+            const testDataImage1 = {
+                object: 'https://images.pexels.com/photos/992734/pexels-photo-992734.jpeg', 
+                obj_type: 'image',
+                obj_action: null,
+                obj_effect: 'blur'
+            };
+
+            const testDataImage2 = {
+                object: 'https://images.pexels.com/photos/57416/cat-sweet-kitty-animals-57416.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
+                obj_type: 'image',
+                obj_action: null,
+                obj_effect: 'blur'
+            };
+
+            const testDataUrl1 = {
+                object: 'https://www.pexels.com/', 
+                obj_type: 'url',
+                obj_action: null,
+                obj_effect: null
+            };
+
+            const testDataUrl2 = {
+                object: 'https://www.oshimaya.jp/', 
+                obj_type: 'url',
+                obj_action: null,
+                obj_effect: null
+            };
+
+            const scrollToElementData = {
+                object: '#fs_Top > div.fs-l-page > main > section > div:nth-child(12) > div > div > div > div > div:nth-child(2) > div > article > div.fs-c-productListItem__imageContainer > div > a > img', // CSS selector of the element to scroll to
+                obj_type: 'tag',
+                obj_action: 'scroll',
+                obj_effect: null
+            };
+
+            setTimeout(() => {
+                console.log('Testing background update to image1...');
+                updateBackground(testDataImage1);
+            }, 10000);
+
+            setTimeout(() => {
+                console.log('Testing background update to image2...');
+                updateBackground(testDataImage2);
+            }, 12000);
+
+            setTimeout(() => {
+                console.log('Testing background update to URL1...');
+                updateBackground(testDataUrl1);
+            }, 15000);
+
+            setTimeout(() => {
+                console.log('Testing background update to URL2...');
+                updateBackground(testDataUrl2);
+            }, 25000);
+
+            setTimeout(() => {
+                console.log('Testing background update: scrollToElementData...');
+                updateBackground(scrollToElementData);
+            }, 30000);
+        // End test
+
+        // Add message event listener
+        window.addEventListener('message', (event) => {
+        // Optional: Verify origin if needed
+        // if (event.origin !== 'expected-origin') return;
+
+        switch(event.data.type) {
+            case 'scrollComplete':
+            console.log('Scroll completed to:', event.data.selector);
+            break;
+            
+            case 'scrollFailed':
+            console.warn('Could not find element:', event.data.selector);
+            break;
+            
+            case 'scrollError':
+            console.error('Error scrolling:', event.data.error);
+            break;
+        }
+        }, false);
+
+        // Function to trigger scroll
+        function scrollToElementInIframe(selector) {
+            if (iframe.contentWindow) {
+                iframe.contentWindow.postMessage({
+                type: 'scrollToElement',
+                selector: selector
+                }, '*');
+            } else {
+                console.error('Iframe content window not accessible');
+            }
+        }
+
         const queryString = window.location.search;
         const urlParams = new URLSearchParams(queryString);
  
         const keySchedule = urlParams.get('keySchedule') ? urlParams.get('keySchedule') : 'schedule_new';
         const liveStreamRoomId = urlParams.get('liveStreamRoomId') ? urlParams.get('liveStreamRoomId') : '-1';
-        const imageElement = document.getElementById('backgroundImage');
         let currentBackgroundImage = '';
         imageElement.style.display = 'none';
         console.log('keySchedule', keySchedule);
@@ -252,6 +427,8 @@
         const livestreamingQuery = doc(dataCollection, liveStreamRoomId);
         try {
             onSnapshot(livestreamingQuery, (snapshot) => {
+                console.log("urlParams", urlParams)
+
                 console.log(snapshot);
                 if (snapshot.exists()) {
                     const data = snapshot.data();
@@ -261,6 +438,7 @@
                         updateCurrentBackground(backgroundImage);
                     }
                     const backgroundVideo = data.background_video;
+                    // This is for vertical or horizontal display
                     const typeBackgroundWeb = data.type_background_web;
                     const background_web = data.background_web;
                     window.linkImage = backgroundVideo;
@@ -1402,7 +1580,7 @@
         }
 
         function _changePosition(orientation) {
-            var typeOrientation = 'portraitUp';
+            var typeOrientation = 'landscapeLeft';
 
             if (orientation) {
                 typeOrientation = orientation;
@@ -1428,13 +1606,15 @@
             } else if (typeOrientation == 'landscapeLeft') {
                 console.log('landscapeLeft................')
                 console.log(currentVrm.length)
+                console.log(window.isPlayingGame)
+                
                 if (currentVrm.length == 1) {
                     if (window.isPlayingGame) {
                         currentVrm[0].scene.position.set(-0.4, 0, -0.4);
                         currentVrm[0].scene.rotation.set(0, -0.4, 0);
                     } else {
-                        currentVrm[0].scene.position.set(0.2, -0.3, 1);
-                        currentVrm[0].scene.rotation.set(0, 0, 0);
+                        currentVrm[0].scene.position.set(1.2, -0.3, 1);
+                        currentVrm[0].scene.rotation.set(0, 0.4, 0);
                         currentVrm[0].scene.scale.set(1, 1, 1);
                     }
                 }
