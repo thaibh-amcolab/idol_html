@@ -24,6 +24,7 @@
             height: 100vh;
             justify-content: center;
             align-items: center;
+            overflow: hidden;
         }
 
         #backgroundVideo {
@@ -38,6 +39,17 @@
         }
 
         #backgroundImage {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: -1;
+            /* Đặt video phía sau các nội dung khác */
+        }
+
+        #backgroundImage2 {
             position: absolute;
             top: 0;
             left: 0;
@@ -81,7 +93,7 @@
             border: none;
             height: 100vh; /* Fixed height for iframe */
             width: 100%;
-            z-index: -5;
+            z-index: 5;
         }
         #site-container {
             position: relative;
@@ -104,7 +116,10 @@
 </head>
 
 <body>
-    <image id="backgroundImage">
+    <div class="imageContainer">
+        <image id="backgroundImage">
+        <image id="backgroundImage2">
+    </div>
 
     </image>
     <video id="backgroundVideo">
@@ -225,19 +240,71 @@
         };
 
         const imageElement = document.getElementById('backgroundImage');
+        const imageElement2 = document.getElementById('backgroundImage2');
         const videoElement = document.getElementById('backgroundVideo');
         const backgroundWeb = document.getElementById('backgroundWeb');
         const backgroundDiv = document.getElementById('background');
 
-        function applyTransitionEffect(effect) {
+        function applyTransitionEffect(effect, object, direction = 'right') {
+            // Ensure we have two image elements
+            const img1 = imageElement;
+            const img2 = imageElement2;
+
+            // Slide directions mapping
+            const slideDirections = {
+                'right': 'translateX(100%)',
+                'left': 'translateX(-100%)',
+                'up': 'translateY(-100%)',
+                'down': 'translateY(100%)'
+            };
+
+            // Common transition settings
+            const transitionDuration = '0.5s';
+            const transitionTiming = 'ease';
+
+            // Reset initial states
+            img1.style.zIndex = '-2';
+            img2.style.zIndex = '-1';
+            img2.style.opacity = '0';
+
             switch(effect) {
                 case 'blur':
-                    imageElement.style.transition = 'filter 0.5s ease';
-                    imageElement.style.filter = 'blur(10px)';
+                    img1.src = object;
+                    
+                    img1.style.transition = `filter ${transitionDuration} ${transitionTiming}, opacity ${transitionDuration} ${transitionTiming}`;
+                    
+                    img1.style.filter = 'blur(5px)';
+
                     setTimeout(() => {
-                        imageElement.style.filter = 'blur(0)';
+                        img1.style.filter = 'blur(0)';
                     }, 500);
                     break;
+
+                case 'slide':
+                    // Prepare img2 with new image and initial off-screen position
+                    img2.src = object;
+                    img2.style.transform = slideDirections[direction];
+                    img2.style.transition = `transform ${transitionDuration} ${transitionTiming}, opacity ${transitionDuration} ${transitionTiming}`;
+
+                    // Trigger reflow to ensure initial state is set
+                    img2.offsetWidth;
+
+                    // Slide img2 in
+                    img2.style.transform = 'translate(0, 0)';
+                    img2.style.opacity = '1';
+
+                    // After slide-in, update img1 and reset img2
+                    setTimeout(() => {
+                        img1.src = object;  // Update img1 source
+                        
+                        // Reset img2
+                        img2.style.display = 'none'
+                        img2.style.transform = slideDirections[direction];
+                        img2.style.opacity = '0';
+                        img2.src = '';
+                    }, 500);
+                    break;
+
                 default:
                     break;
             }
@@ -245,7 +312,13 @@
 
         function resetAllBackgrounds(obj_type) {
             if (obj_type === 'url' || obj_type === 'image') {
-                imageElement.style.display = 'none';
+                if (obj_type === 'image') {
+                    imageElement.style.display = 'block';
+                    imageElement2.style.display = 'block';
+                } else {
+                    imageElement.style.display = 'none';
+                    imageElement2.style.display = 'none';
+                }
                 videoElement.style.display = 'none';
                 backgroundWeb.style.display = 'none';
                 backgroundDiv.style.display = 'none';
@@ -277,10 +350,8 @@
                 case 'image':
                     if (imageElement.src !== data.object) {
                         if (data.obj_effect) {
-                            applyTransitionEffect(data.obj_effect);
+                            applyTransitionEffect(data.obj_effect, data.object);
                         }
-                        imageElement.src = data.object;
-                        imageElement.style.display = 'block';
                     }
                     break;
 
@@ -290,6 +361,12 @@
                             scrollToElementInIframe(data.object)
                         } else {
                             console.warn('Cannot scroll: No iframe is currently displayed');
+                        }
+                    } else if (data.obj_action === 'zoom in') {
+                        if (backgroundWeb.style.display === 'block') {
+                            zoomInElementInIframe(data.object)
+                        } else {
+                            console.warn('Cannot zoom in: No iframe is currently displayed');
                         }
                     }
                     break;
@@ -303,86 +380,181 @@
         //     updateBackground(data);
         // });
 
-        // Test changing background
+        // // Test changing background
             const testDataImage1 = {
                 object: 'https://images.pexels.com/photos/992734/pexels-photo-992734.jpeg', 
                 obj_type: 'image',
                 obj_action: null,
-                obj_effect: 'blur'
+                obj_effect: 'slide'
             };
-
             const testDataImage2 = {
                 object: 'https://images.pexels.com/photos/57416/cat-sweet-kitty-animals-57416.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
                 obj_type: 'image',
                 obj_action: null,
-                obj_effect: 'blur'
+                obj_effect: 'slide'
             };
-
+            const testDataImage3 = {
+                object: 'https://images.pexels.com/photos/16491141/pexels-photo-16491141/free-photo-of-cat-lying-down-in-black-and-white.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
+                obj_type: 'image',
+                obj_action: null,
+                obj_effect: 'slide'
+            };
             const testDataUrl1 = {
                 object: 'https://www.pexels.com/', 
                 obj_type: 'url',
                 obj_action: null,
                 obj_effect: null
             };
-
             const testDataUrl2 = {
                 object: 'https://www.oshimaya.jp/', 
                 obj_type: 'url',
                 obj_action: null,
                 obj_effect: null
             };
-
             const scrollToElementData = {
                 object: '#fs_Top > div.fs-l-page > main > section > div:nth-child(12) > div > div > div > div > div:nth-child(2) > div > article > div.fs-c-productListItem__imageContainer > div > a > img', // CSS selector of the element to scroll to
                 obj_type: 'tag',
                 obj_action: 'scroll',
                 obj_effect: null
             };
+            const scrollToElementData2 = {
+                object:  'https://www.oshimaya.jp/c/allfluits/ichigo/fro-hinoshizuku',
+                obj_type: 'url',
+                obj_action: null,
+                obj_effect: null
+            };
+            const scrollToElementData3 = {
+                object: '#fs_form > div > div.fs-p-productDescription.fs-p-productDescription--short > img:nth-child(5)',
+                obj_type: 'tag',
+                obj_action: 'scroll',
+                obj_effect: null
+            };
+            const scrollToElementData4 = {
+                object: '#fs_ProductDetails > div.fs-l-page > footer > div.fs-l-footer__contents > div.fs-p-bannerGroup.fs-l-col--3 > div.fs-p-banner.fs-p-banner--registration',
+                obj_type: 'tag',
+                obj_action: 'scroll',
+                obj_effect: null
+            };
 
+            const scrollToElementData5 = {
+                object: '#fs_form > div > div.fs-c-productReview > div > a > span',
+                obj_type: 'tag',
+                obj_action: 'scroll',
+                obj_effect: null
+            };
+
+            const zoomInElementData1 = {
+                object: '#fs_ProductDetails > div.fs-l-page > footer > div.fs-l-footer__contents > div.fs-p-bannerGroup.fs-l-col--3 > div.fs-p-banner.fs-p-banner--registration',
+                obj_type: 'tag',
+                obj_action: 'zoom in',
+                obj_effect: null
+            };
+
+            const zoomInElementData2 = {
+                object: '#fs_ProductDetails > div.fs-l-page > main > aside > a:nth-child(17) > img',
+                obj_type: 'tag',
+                obj_action: 'zoom in',
+                obj_effect: null
+            }
+
+            const zoomInElementData3 = {
+                object: '#fs_ProductDetails > div.fs-l-page > header > div.fs-l-header__contents > div.fs-l-header__utility > div > span.fs-p-phoneOrder__phoneNum',
+                obj_type: 'tag',
+                obj_action: 'zoom in',
+                obj_effect: null
+            }
+
+
+
+            // setTimeout(() => {
+            //      console.log('Testing background update to image1...');
+            //      updateBackground(testDataImage1);
+            //  }, 5000);
+            // setTimeout(() => {
+            //      console.log('Testing background update to image2...');
+            //      updateBackground(testDataImage2);
+            //  }, 10000);
+            //  setTimeout(() => {
+            //      console.log('Testing background update to image3...');
+            //      updateBackground(testDataImage3);
+            //  }, 15000);
+            // setTimeout(() => {
+            //      console.log('Testing background update to URL1...');
+            //      updateBackground(testDataUrl1);
+            //  }, 20000);
+            // setTimeout(() => {
+            //      console.log('Testing background update to URL2...');
+            //      updateBackground(testDataUrl2);
+            //  }, 5000);
+            // setTimeout(() => {
+            //      console.log('Testing background update: scrollToElementData...');
+            //      updateBackground(scrollToElementData);
+            //  }, 10000);
             setTimeout(() => {
-                console.log('Testing background update to image1...');
-                updateBackground(testDataImage1);
-            }, 10000);
-
+                 console.log('Testing background update: scrollToElementData...');
+                 updateBackground(scrollToElementData2);
+             }, 5000);
             setTimeout(() => {
-                console.log('Testing background update to image2...');
-                updateBackground(testDataImage2);
-            }, 12000);
+                 console.log('Testing background update: scrollToElementData...');
+                 updateBackground(scrollToElementData3);
+             }, 10000);
 
-            setTimeout(() => {
-                console.log('Testing background update to URL1...');
-                updateBackground(testDataUrl1);
-            }, 15000);
 
-            setTimeout(() => {
-                console.log('Testing background update to URL2...');
-                updateBackground(testDataUrl2);
-            }, 25000);
+             setTimeout(() => {
+                 console.log('Testing background update: scrollToElementData...');
+                 updateBackground(scrollToElementData5);
+             }, 13000);
 
-            setTimeout(() => {
-                console.log('Testing background update: scrollToElementData...');
-                updateBackground(scrollToElementData);
-            }, 30000);
-        // End test
+            //  setTimeout(() => {
+            //      console.log('Testing background update: scrollToElementData...');
+            //      updateBackground(zoomInElementData1);
+            //  }, 13000);
 
-        // Add message event listener
+             setTimeout(() => {
+                 console.log('Testing background update: scrollToElementData...');
+                 updateBackground(zoomInElementData2);
+             }, 16000);
+
+             setTimeout(() => {
+                 console.log('Testing background update: scrollToElementData...');
+                 updateBackground(scrollToElementData5);
+             }, 22000);
+
+             setTimeout(() => {
+                 console.log('Testing background update: scrollToElementData...');
+                 updateBackground(zoomInElementData3);
+             }, 25000);
+         // End test
+       // Add message event listener
         window.addEventListener('message', (event) => {
-        // Optional: Verify origin if needed
-        // if (event.origin !== 'expected-origin') return;
+            // Optional: Verify origin if needed
+            // if (event.origin !== 'expected-origin') return;
 
-        switch(event.data.type) {
-            case 'scrollComplete':
-            console.log('Scroll completed to:', event.data.selector);
-            break;
-            
-            case 'scrollFailed':
-            console.warn('Could not find element:', event.data.selector);
-            break;
-            
-            case 'scrollError':
-            console.error('Error scrolling:', event.data.error);
-            break;
-        }
+            switch(event.data.type) {
+                case 'scrollComplete':
+                console.log('Scroll completed to:', event.data.selector);
+                break;
+                
+                case 'scrollFailed':
+                console.warn('Could not find element:', event.data.selector);
+                break;
+                
+                case 'scrollError':
+                console.error('Error scrolling:', event.data.error);
+                break;
+
+                case 'zoomComplete':
+                console.log('Zoom successful for:', event.data.selector);
+
+                case 'zoomFailed':
+                console.error('Zoom failed for:', event.data.selector);
+                
+                case 'zoomClosed':
+                console.log('Zoom closed for:', event.data.selector);
+
+                case 'Error':
+                console.log('Error:', event.data.selector);
+            }
         }, false);
 
         // Function to trigger scroll
@@ -391,6 +563,17 @@
                 iframe.contentWindow.postMessage({
                 type: 'scrollToElement',
                 selector: selector
+                }, '*');
+            } else {
+                console.error('Iframe content window not accessible');
+            }
+        }
+
+        function zoomInElementInIframe(selector) {
+            if (iframe.contentWindow) {
+                iframe.contentWindow.postMessage({
+                    type: 'ZoomIn',
+                    selector: selector
                 }, '*');
             } else {
                 console.error('Iframe content window not accessible');
