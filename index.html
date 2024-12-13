@@ -93,7 +93,7 @@
             border: none;
             height: 100vh; /* Fixed height for iframe */
             width: 100%;
-            z-index: 5;
+            z-index: -1;
         }
         #site-container {
             position: relative;
@@ -325,7 +325,22 @@
             }
         }
 
-        function updateBackground(data) {
+        const resetWebBackground = () => {
+            backgroundWeb.style.display = 'block';
+            imageElement.style.display = 'none';
+            imageElement2.style.display = 'none';
+        }
+
+        const waitForIframeLoad = () => {
+            return new Promise((resolve) => {
+                iframe.onload = () => {
+                    resolve();
+                    iframe.onload = null;
+                };
+            });
+        };
+
+        async function updateBackground(data) {
             const hasChanged =
                 data.object !== backgroundState.object ||
                 data.obj_type !== backgroundState.obj_type ||
@@ -337,18 +352,19 @@
                 return;
             }
 
-            resetAllBackgrounds(data.obj_type);
-
             switch (data.obj_type) {
                 case 'url':
                     if (iframe.src !== data.object) {
                         updateIframeSrc(data.object, 'horizontal');
-                        backgroundWeb.style.display = 'block';
+
+                        await waitForIframeLoad();
+                        resetWebBackground();
                     }
                     break;
 
                 case 'image':
                     if (imageElement.src !== data.object) {
+                        resetAllBackgrounds(data.obj_type);
                         if (data.obj_effect) {
                             applyTransitionEffect(data.obj_effect, data.object);
                         }
@@ -364,9 +380,15 @@
                         }
                     } else if (data.obj_action === 'zoom in') {
                         if (backgroundWeb.style.display === 'block') {
-                            zoomInElementInIframe(data.object)
+                            zoomInElementInIframe(data.object, 'ZoomIn')
                         } else {
                             console.warn('Cannot zoom in: No iframe is currently displayed');
+                        }
+                    } else if (data.obj_action === 'zoom out') {
+                        if (backgroundWeb.style.display === 'block') {
+                            zoomInElementInIframe(data.object, 'ZoomOut')
+                        } else {
+                            console.warn('Cannot zoom out: No iframe is currently displayed');
                         }
                     }
                     break;
@@ -385,19 +407,19 @@
                 object: 'https://images.pexels.com/photos/992734/pexels-photo-992734.jpeg', 
                 obj_type: 'image',
                 obj_action: null,
-                obj_effect: 'slide'
+                obj_effect: 'blur'
             };
             const testDataImage2 = {
                 object: 'https://images.pexels.com/photos/57416/cat-sweet-kitty-animals-57416.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
                 obj_type: 'image',
                 obj_action: null,
-                obj_effect: 'slide'
+                obj_effect: 'blur'
             };
             const testDataImage3 = {
                 object: 'https://images.pexels.com/photos/16491141/pexels-photo-16491141/free-photo-of-cat-lying-down-in-black-and-white.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
                 obj_type: 'image',
                 obj_action: null,
-                obj_effect: 'slide'
+                obj_effect: 'blur'
             };
             const testDataUrl1 = {
                 object: 'https://www.pexels.com/', 
@@ -450,6 +472,20 @@
                 obj_effect: null
             };
 
+            const zoomOutElementData1 = {
+                object: '#fs_ProductDetails > div.fs-l-page > footer > div.fs-l-footer__contents > div.fs-p-bannerGroup.fs-l-col--3 > div.fs-p-banner.fs-p-banner--registration',
+                obj_type: 'tag',
+                obj_action: 'zoom out',
+                obj_effect: null
+            };
+
+            const zoomOutElementData2 = {
+                object: '#fs_ProductDetails > div.fs-l-page > main > aside > a:nth-child(17) > img',
+                obj_type: 'tag',
+                obj_action: 'zoom out',
+                obj_effect: null
+            };
+
             const zoomInElementData2 = {
                 object: '#fs_ProductDetails > div.fs-l-page > main > aside > a:nth-child(17) > img',
                 obj_type: 'tag',
@@ -464,24 +500,35 @@
                 obj_effect: null
             }
 
+            const zoomOutElementData3 = {
+                object: '#fs_ProductDetails > div.fs-l-page > header > div.fs-l-header__contents > div.fs-l-header__utility > div > span.fs-p-phoneOrder__phoneNum',
+                obj_type: 'tag',
+                obj_action: 'zoom out',
+                obj_effect: null
+            }
 
 
-            // setTimeout(() => {
-            //      console.log('Testing background update to image1...');
-            //      updateBackground(testDataImage1);
-            //  }, 5000);
-            // setTimeout(() => {
-            //      console.log('Testing background update to image2...');
-            //      updateBackground(testDataImage2);
-            //  }, 10000);
-            //  setTimeout(() => {
-            //      console.log('Testing background update to image3...');
-            //      updateBackground(testDataImage3);
-            //  }, 15000);
-            // setTimeout(() => {
-            //      console.log('Testing background update to URL1...');
-            //      updateBackground(testDataUrl1);
-            //  }, 20000);
+
+            setTimeout(() => {
+                 console.log('Testing background update to URL1...');
+                 updateBackground(testDataUrl2);
+             }, 5000);
+            setTimeout(() => {
+                 console.log('Testing background update to image1...');
+                 updateBackground(testDataImage1);
+             }, 10000);
+            setTimeout(() => {
+                 console.log('Testing background update to image2...');
+                 updateBackground(testDataImage2);
+             }, 15000);
+             setTimeout(() => {
+                 console.log('Testing background update to image3...');
+                 updateBackground(testDataImage3);
+             }, 20000);
+            setTimeout(() => {
+                 console.log('Testing background update to URL1...');
+                 updateBackground(testDataUrl1);
+             }, 25000);
             // setTimeout(() => {
             //      console.log('Testing background update to URL2...');
             //      updateBackground(testDataUrl2);
@@ -490,40 +537,45 @@
             //      console.log('Testing background update: scrollToElementData...');
             //      updateBackground(scrollToElementData);
             //  }, 10000);
-            setTimeout(() => {
-                 console.log('Testing background update: scrollToElementData...');
-                 updateBackground(scrollToElementData2);
-             }, 5000);
-            setTimeout(() => {
-                 console.log('Testing background update: scrollToElementData...');
-                 updateBackground(scrollToElementData3);
-             }, 10000);
+            // setTimeout(() => {
+            //      console.log('Testing background update: scrollToElementData...');
+            //      updateBackground(scrollToElementData2);
+            //  }, 5000);
+            // setTimeout(() => {
+            //      console.log('Testing background update: scrollToElementData...');
+            //      updateBackground(zoomInElementData3);
+            //  }, 10000);
 
-
-             setTimeout(() => {
-                 console.log('Testing background update: scrollToElementData...');
-                 updateBackground(scrollToElementData5);
-             }, 13000);
 
             //  setTimeout(() => {
             //      console.log('Testing background update: scrollToElementData...');
-            //      updateBackground(zoomInElementData1);
+            //      updateBackground(scrollToElementData5);
             //  }, 13000);
 
-             setTimeout(() => {
-                 console.log('Testing background update: scrollToElementData...');
-                 updateBackground(zoomInElementData2);
-             }, 16000);
+            // //  setTimeout(() => {
+            // //      console.log('Testing background update: scrollToElementData...');
+            // //      updateBackground(zoomInElementData1);
+            // //  }, 13000);
 
-             setTimeout(() => {
-                 console.log('Testing background update: scrollToElementData...');
-                 updateBackground(scrollToElementData5);
-             }, 22000);
+            //  setTimeout(() => {
+            //      console.log('Testing background update: scrollToElementData...');
+            //      updateBackground(zoomInElementData2);
+            //  }, 16000);
 
-             setTimeout(() => {
-                 console.log('Testing background update: scrollToElementData...');
-                 updateBackground(zoomInElementData3);
-             }, 25000);
+            //  setTimeout(() => {
+            //      console.log('Testing background update: scrollToElementData...');
+            //      updateBackground(zoomInElementData3);
+            //  }, 22000);
+
+            //  setTimeout(() => {
+            //      console.log('Testing background update: scrollToElementData...');
+            //      updateBackground(scrollToElementData5);
+            //  }, 25000);
+
+            // //  setTimeout(() => {
+            // //      console.log('Testing background update: scrollToElementData...');
+            // //      updateBackground(zoomInElementData3);
+            // //  }, 30000);
          // End test
        // Add message event listener
         window.addEventListener('message', (event) => {
@@ -552,6 +604,15 @@
                 case 'zoomClosed':
                 console.log('Zoom closed for:', event.data.selector);
 
+                case 'zoomOutComplete':
+                console.log('Zoom Out successful for:', event.data.selector);
+
+                case 'zoomOutFailed':
+                console.error('Zoom Out failed for:', event.data.selector);
+                
+                case 'zoomOutClosed':
+                console.log('Zoom Out closed for:', event.data.selector);
+
                 case 'Error':
                 console.log('Error:', event.data.selector);
             }
@@ -569,10 +630,10 @@
             }
         }
 
-        function zoomInElementInIframe(selector) {
+        function zoomInElementInIframe(selector, type) {
             if (iframe.contentWindow) {
                 iframe.contentWindow.postMessage({
-                    type: 'ZoomIn',
+                    type: type,
                     selector: selector
                 }, '*');
             } else {
